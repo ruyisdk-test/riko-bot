@@ -6,7 +6,7 @@ regex = '<a href="([\d.]+)/">[\d.]+/</a>'
 [source]
 # see: riko.upstreams.regex.RegexUpstream
 regex_file_url = "{{nvchecker.url}}{{upstream_version}}/"
-regex_file_regex = '<a href="(.+)">.+</a> '
+regex_file_regex = '<a href="(.+)">.+</a>'
 
 [entities]
 image-combo = [
