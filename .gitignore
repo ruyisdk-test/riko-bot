@@ -1,6 +1,14 @@
 *.pyc
 /cache
 
+/docs
+
+/venv
+
+/.venv
+
+poetry.lock
+
 .idea
 */.idea
 
