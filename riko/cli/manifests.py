@@ -1,3 +1,16 @@
+# riko/cli/manifests.py - 清单生成引擎
+"""
+从 riko.yaml 模板生成 packages-index 清单文件
+
+核心功能：
+1. 读取 riko.yaml 模板（包含 Python 表达式）
+2. 使用 AST 解析和执行模板中的表达式
+3. 应用推理规则（partition_map → strategy → blob → checksums）
+4. 验证清单格式
+5. 支持自定义 riko.py 钩子函数
+
+"""
+
 
 import ast
 import copy
@@ -21,10 +34,15 @@ from ..packages_index.manifests import PackageVersion
 from ..rikoriko import get_riko
 from ..upstreams.github import GithubUpstream
 from ..upstreams.regex import RegexUpstream
+# 数据库记录工具
+from ..database import record_command  # 数据库记录装饰器
+from ..database import get_recorder  # 数据库记录器
 
 logger = logging.getLogger(__name__)
 
 
+# ========== 主函数：生成清单 ==========
+@record_command("manifests")  # 使用装饰器自动记录数据库
 def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
     """
     Generate packages-index manifests
@@ -34,9 +52,17 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
     :return:
     """
 
+    # ========== 初始化数据库记录器 ==========
+    recorder = get_recorder()
+
     # nvchecker result
     result = get_riko().get_nvchecker_result(up_name)
-
+    # {
+    #     "name": "LicheeRV-Nano-Build",
+    #     "event": "updated",
+    #     "old_version": "0.20260107.0",
+    #     "version": "0.20260114.0"
+    # }
     if result is None:
         logger.error("No such nvchecker upstream %s", up_name)
         logger.error("May be new package")
@@ -44,7 +70,7 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
         # if no gen_vers given, let nvchecker deside
         if len(gen_vers) == 0:
             gen_vers.append(result["version"])
-
+    # ========== 步骤 2: 确定旧版本 ==========
     if result is None:
         # this empty old_ver is used as a flag
         # TODO: better resolution
@@ -56,7 +82,8 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
         if not down_grade:
             logger.warning("Already updated")
             return
-
+    # ========== 步骤 3: 检查并过滤版本列表 ==========
+    #     # 从生成列表中移除旧版本（避免重复生成）
     # check list
     if old_ver in gen_vers:
         logger.warning(f"Remove old version `{old_ver}` from generate version list")
@@ -107,7 +134,7 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
     riko_yaml_p = ruyi_pkgs_dir / riko_toml.get_category() / up_name / "riko.yaml"
 
     if not riko_yaml_p.exists():
-        logger.fatal("You must ues riko.yaml in this riko version")
+        logger.fatal("You must use riko.yaml in this riko version") # 修改拼写错误
         return
 
     riko_yaml_orig: Dict = yaml.safe_load(riko_yaml_p.read_text())
@@ -627,25 +654,71 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
 
         riko_yaml_source = {}
         riko_yaml_cbs = {}
+        manifest_ids = {}  # 跟踪每个 combo 的 manifest_id
         # initial packages-index toml cfgs from "source" section in riko.yaml
         if "source" in riko_yaml.keys():
             riko_yaml_source = tree_update({"format": riko_yaml["format"]}, riko_yaml["source"])
-
+        # generate each combo
         for i in range(0, len(gen_cbs)):
             if gen_cbs[i] in riko_yaml.keys():
+                combo_name = gen_cbs[i]
                 # update toml cfgs from each package section in riko.yaml
                 riko_yaml_ast = tree_update(riko_yaml_source, riko_yaml[gen_cbs[i]])
 
                 old_version = gen_cbs_ov[i].get_version()
                 new_manifests = {"metadata": {"upstream_version": gv}}
 
-                manifest_stage1 = riko_yaml_run(riko_toml_upstream, old_version, new_manifests, riko_yaml_ast)
+                # ========== 记录 manifest 生成开始 ==========
+                manifest_id = None
+                try:
+                    manifest = recorder.record_manifest_generation(
+                        package_name=up_name,
+                        combo_name=combo_name,
+                        version=gv,
+                        status="running"  # 临时状态，表示正在生成
+                    )
+                    manifest_id = manifest.id
+                    manifest_ids[combo_name] = manifest_id  # 保存以备后用
+                except Exception as e:
+                    logger.warning(f"[DB] Failed to create manifest record: {e}")
+
+                # ========== 尝试生成 manifest ==========
+                try:
+                    manifest_stage1 = riko_yaml_run(riko_toml_upstream, old_version, new_manifests, riko_yaml_ast)
+                except Exception as e:
+                    # 生成失败，更新数据库记录为 failed
+                    if manifest_id:
+                        try:
+                            import json
+                            error_details_dict = {
+                                "error_type": type(e).__name__,
+                                "error_message": str(e)
+                            }
+                            error_code = getattr(e, 'code', None)
+                            if error_code:
+                                error_details_dict["error_code"] = error_code
+
+                            recorder.db.update_manifest_record(
+                                manifest_id,
+                                status="failed",
+                                error_type=type(e).__name__,
+                                error_message=str(e),
+                                error_code=error_code,
+                                error_details=json.dumps(error_details_dict)
+                            )
+                            logger.error(f"[DB] Updated manifest {manifest_id} to failed: {type(e).__name__}: {e}")
+                        except Exception as db_err:
+                            logger.warning(f"[DB] Failed to update manifest record: {db_err}")
+
+                    # 标记这个 combo 为失败，后续代码会跳过
+                    riko_yaml_cbs[combo_name] = None
+                    continue  # 跳过这个 combo，继续处理下一个
 
                 new_version = str(old_version)
                 if "version" in manifest_stage1:
                     new_version = manifest_stage1["version"]
                     manifest_stage1.pop("version")
-                riko_yaml_cbs[gen_cbs[i]] = (new_version, manifest_stage1)
+                riko_yaml_cbs[combo_name] = (new_version, manifest_stage1)
 
         # check riko.py
         riko_py_rikoring = None
@@ -679,12 +752,18 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
         # new version
         new_versions: List[RikoPkg] = []
         for i in range(0, len(gen_cbs_ov)):
-            pkg = RikoPkg(riko_toml.get_category(), gen_cbs[i], riko_toml.get_name(), semver.Version.parse(riko_yaml_cbs[gen_cbs[i]][0]), gv, riko_toml_upstream)
-            pkg.set_manifest(riko_yaml_cbs[gen_cbs[i]][1])
+            combo = gen_cbs[i]
+            # 跳过生成失败的 combo ，防止整个循环崩溃，以及后续的 combo 都无法处理
+            if riko_yaml_cbs.get(combo) is None:
+                logger.warning(f"Skipping failed combo: {combo}")
+                continue
+
+            pkg = RikoPkg(riko_toml.get_category(), combo, riko_toml.get_name(), semver.Version.parse(riko_yaml_cbs[combo][0]), gv, riko_toml_upstream)
+            pkg.set_manifest(riko_yaml_cbs[combo][1])
             new_versions.append(pkg)
 
         # rikoring
-        if riko_py_rikoring is not None:
+        if riko_py_rikoring is not None and len(new_versions) > 0:
             try:
                 riko_py_rikoring(old_versions, new_versions)
             except Exception as e:
@@ -693,6 +772,9 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
 
         # manifests generate rules
         for n, m in riko_yaml_cbs.items():
+            # 跳过生成失败的 combo
+            if m is None:
+                continue
             manifests_reasoning(m[1])
 
         # manifests validate
@@ -706,8 +788,21 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
                 logger.error(f"manifest validation failed for package {v.get_combo()} version {ma["metadata"]["upstream_version"]}")
                 logger.info(f"see failed manifests content: {ma}")
 
+                # 更新数据库记录为失败
+                combo_name = v.get_combo()
+                if combo_name in manifest_ids:
+                    try:
+                        recorder.db.update_manifest_record(
+                            manifest_ids[combo_name],
+                            status="failed",
+                            error_type="ValidationError",
+                            error_message="Manifest validation failed"
+                        )
+                    except Exception as e:
+                        logger.warning(f"[DB] Failed to update manifest record: {e}")
+
         # post_rikoring
-        if riko_py_post_rikoring is not None:
+        if riko_py_post_rikoring is not None and len(new_versions) > 0:
             try:
                 riko_py_post_rikoring(old_versions, new_versions)
             except Exception as e:
@@ -745,6 +840,18 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
                                 f"{ma["metadata"]["upstream_version"]} and version "
                                 f"{oma["metadata"]["upstream_version"]} have same checksums")
 
+                    # 更新数据库记录为跳过
+                    combo_name = new_versions[i].get_combo()
+                    if combo_name in manifest_ids:
+                        try:
+                            recorder.db.update_manifest_record(
+                                manifest_ids[combo_name],
+                                status="skipped",
+                                skip_reason="keep_back"
+                            )
+                        except Exception as e:
+                            logger.warning(f"[DB] Failed to update manifest record: {e}")
+
         # write toml
         new_gen = False
         for v in new_versions:
@@ -768,6 +875,24 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
 
             new_gen = True
             logger.info(f"new manifest for package {v.get_combo()} version {ma["metadata"]["upstream_version"]}")
+
+            # 更新数据库记录为成功
+            combo_name = v.get_combo()
+            if combo_name in manifest_ids:
+                try:
+                    # 计算文件大小和哈希
+                    manifest_size = new_toml.stat().st_size if new_toml.exists() else 0
+                    manifest_hash = hashlib.sha256(new_toml.read_bytes()).hexdigest() if new_toml.exists() else ""
+
+                    recorder.db.update_manifest_record(
+                        manifest_ids[combo_name],
+                        status="success",
+                        manifest_path=str(new_toml),
+                        manifest_size=manifest_size,
+                        manifest_hash=manifest_hash
+                    )
+                except Exception as e:
+                    logger.warning(f"[DB] Failed to update manifest record: {e}")
 
         if not new_gen:
             logger.warning(f"no manifest for upstream {riko_toml.get_name()} version {gv}")
