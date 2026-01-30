@@ -1,15 +1,4 @@
 # riko/cli/manifests.py - 清单生成引擎
-"""
-从 riko.yaml 模板生成 packages-index 清单文件
-
-核心功能：
-1. 读取 riko.yaml 模板（包含 Python 表达式）
-2. 使用 AST 解析和执行模板中的表达式
-3. 应用推理规则（partition_map → strategy → blob → checksums）
-4. 验证清单格式
-5. 支持自定义 riko.py 钩子函数
-
-"""
 
 
 import ast
@@ -41,18 +30,9 @@ from ..database import get_recorder  # 数据库记录器
 logger = logging.getLogger(__name__)
 
 
-# ========== 主函数：生成清单 ==========
-@record_command("manifests")  # 使用装饰器自动记录数据库
+@record_command("manifests")
 def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
-    """
-    Generate packages-index manifests
-    :param up_name: upstream name
-    :param gen_vers: will generate versions
-    :param down_grade: will generate downgrade manifests
-    :return:
-    """
 
-    # ========== 初始化数据库记录器 ==========
     recorder = get_recorder()
 
     # nvchecker result
@@ -70,7 +50,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
         # if no gen_vers given, let nvchecker deside
         if len(gen_vers) == 0:
             gen_vers.append(result["version"])
-    # ========== 步骤 2: 确定旧版本 ==========
     if result is None:
         # this empty old_ver is used as a flag
         # TODO: better resolution
@@ -82,8 +61,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
         if not down_grade:
             logger.warning("Already updated")
             return
-    # ========== 步骤 3: 检查并过滤版本列表 ==========
-    #     # 从生成列表中移除旧版本（避免重复生成）
     # check list
     if old_ver in gen_vers:
         logger.warning(f"Remove old version `{old_ver}` from generate version list")
@@ -179,12 +156,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
                 tree_old[k] = tree_up[k]
 
     def tree_update(tree_old: Dict, tree_raw: Dict) -> Dict:
-        """
-        update tree_raw to tree_old, and turn str value to ast
-        :param tree_old:
-        :param tree_raw:
-        :return:
-        """
         tree_new = copy.deepcopy(tree_old)
 
         tree_update_inner(tree_new, tree_parse_inner("k", tree_raw)["k"])
@@ -213,12 +184,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
             return _name_url[0]
 
         def _uncompress(_orig: str) -> str:
-            """
-            unpack package
-            See: https://github.com/ruyisdk/ruyi/blob/main/ruyi/ruyipkg/unpack_method.py
-            :param _orig:
-            :return:
-            """
             _tars = [".tar.gz", ".tar.bz2", ".tar.lz4", ".tar.xz", ".tar.zst", ".gz", ".bz2", ".lz4", ".xz", ".zst", ".zip"]
             for t in _tars:
                 if _orig.endswith(t):
@@ -344,11 +309,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
 
     # manifests reasoning rule set
     def manifests_r1(_facts: Dict) -> bool:
-        """
-        from provisionable.partition_map to provisionable.strategy
-        :param _facts:
-        :return: fact is upgraded
-        """
         if "provisionable" not in _facts.keys():
             return False
 
@@ -385,11 +345,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
         return False
 
     def manifests_r5(_facts: Dict) -> bool:
-        """
-        from distfiles.name to blob
-        :param _facts:
-        :return:
-        """
         if "blob" not in _facts.keys():
             _facts["blob"] = {}
         _blob = _facts.get("blob")
@@ -416,11 +371,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
         return False
 
     def manifests_r9(_facts: Dict) -> bool:
-        """
-        distfiles size, checksums and restrict
-        :param _facts:
-        :return:
-        """
         if "distfiles" not in _facts.keys():
             return False
         if not isinstance(_facts["distfiles"], List) or len(_facts["distfiles"]) == 0:
@@ -479,11 +429,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
         return False
 
     def manifests_reasoning(_ma: Dict):
-        """
-        generate full manifests by rules
-        :param _ma:
-        :return:
-        """
         _rules: List[Callable[[Dict], bool]] = [
             manifests_r1,
             manifests_r5,
@@ -506,11 +451,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
             logger.warning("rule reasoning run so many times")
 
     def manifests_validate(_ma: Dict) -> bool:
-        """
-        check manifests dict keys and values
-        :param _ma:
-        :return:
-        """
 
         # empty type to show its type, List cannot be empty, Dict can be empty
         # but List and Dict cannot be empty in real manifests
@@ -668,25 +608,22 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
                 old_version = gen_cbs_ov[i].get_version()
                 new_manifests = {"metadata": {"upstream_version": gv}}
 
-                # ========== 记录 manifest 生成开始 ==========
                 manifest_id = None
                 try:
                     manifest = recorder.record_manifest_generation(
                         package_name=up_name,
                         combo_name=combo_name,
                         version=gv,
-                        status="running"  # 临时状态，表示正在生成
+                        status="running"
                     )
                     manifest_id = manifest.id
-                    manifest_ids[combo_name] = manifest_id  # 保存以备后用
+                    manifest_ids[combo_name] = manifest_id
                 except Exception as e:
                     logger.warning(f"[DB] Failed to create manifest record: {e}")
 
-                # ========== 尝试生成 manifest ==========
                 try:
                     manifest_stage1 = riko_yaml_run(riko_toml_upstream, old_version, new_manifests, riko_yaml_ast)
                 except Exception as e:
-                    # 生成失败，更新数据库记录为 failed
                     if manifest_id:
                         try:
                             import json
@@ -710,9 +647,8 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
                         except Exception as db_err:
                             logger.warning(f"[DB] Failed to update manifest record: {db_err}")
 
-                    # 标记这个 combo 为失败，后续代码会跳过
                     riko_yaml_cbs[combo_name] = None
-                    continue  # 跳过这个 combo，继续处理下一个
+                    continue
 
                 new_version = str(old_version)
                 if "version" in manifest_stage1:
@@ -753,7 +689,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
         new_versions: List[RikoPkg] = []
         for i in range(0, len(gen_cbs_ov)):
             combo = gen_cbs[i]
-            # 跳过生成失败的 combo ，防止整个循环崩溃，以及后续的 combo 都无法处理
             if riko_yaml_cbs.get(combo) is None:
                 logger.warning(f"Skipping failed combo: {combo}")
                 continue
@@ -770,14 +705,11 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
                 logger.error(e)
                 traceback.print_exc()
 
-        # manifests generate rules
         for n, m in riko_yaml_cbs.items():
-            # 跳过生成失败的 combo
             if m is None:
                 continue
             manifests_reasoning(m[1])
 
-        # manifests validate
         for v in new_versions:
             ma, rd = v.get_manifest()
             assert not rd
@@ -788,7 +720,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
                 logger.error(f"manifest validation failed for package {v.get_combo()} version {ma["metadata"]["upstream_version"]}")
                 logger.info(f"see failed manifests content: {ma}")
 
-                # 更新数据库记录为失败
                 combo_name = v.get_combo()
                 if combo_name in manifest_ids:
                     try:
@@ -809,7 +740,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
                 logger.error(e)
                 traceback.print_exc()
 
-        # check `keep_back` policy
         for i in range(0, len(new_versions)):
             if old_versions[i].accept_policy("keep_back"):
                 ma, rd = new_versions[i].get_manifest()
@@ -840,7 +770,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
                                 f"{ma["metadata"]["upstream_version"]} and version "
                                 f"{oma["metadata"]["upstream_version"]} have same checksums")
 
-                    # 更新数据库记录为跳过
                     combo_name = new_versions[i].get_combo()
                     if combo_name in manifest_ids:
                         try:
@@ -852,7 +781,6 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
                         except Exception as e:
                             logger.warning(f"[DB] Failed to update manifest record: {e}")
 
-        # write toml
         new_gen = False
         for v in new_versions:
             ma, rd = v.get_manifest()
@@ -876,11 +804,9 @@ def manifests(up_name: str, gen_vers: List[str], down_grade: bool):
             new_gen = True
             logger.info(f"new manifest for package {v.get_combo()} version {ma["metadata"]["upstream_version"]}")
 
-            # 更新数据库记录为成功
             combo_name = v.get_combo()
             if combo_name in manifest_ids:
                 try:
-                    # 计算文件大小和哈希
                     manifest_size = new_toml.stat().st_size if new_toml.exists() else 0
                     manifest_hash = hashlib.sha256(new_toml.read_bytes()).hexdigest() if new_toml.exists() else ""
 

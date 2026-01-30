@@ -1,8 +1,4 @@
 # riko/scheduler.py - 定时任务调度器
-"""
-APScheduler 定时任务管理器
-
-"""
 
 import logging
 import signal
@@ -21,10 +17,8 @@ from riko.database import get_recorder
 
 logger = logging.getLogger(__name__)
 
-# ========== 调度器实例 ==========
 _scheduler: BackgroundScheduler = None
 
-# 获取调度器实例（单例模式）
 def get_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is None:
@@ -32,15 +26,7 @@ def get_scheduler() -> BackgroundScheduler:
     return _scheduler
 
 
-# ========== 调度器管理 ==========
-# 启动调度器
 def start_scheduler(hour: int = 2, minute: int = 0):
-    """
-    启动调度器
-
-    :param hour: 每天执行的小时（0-23，默认凌晨 2 点）
-    :param minute: 每天执行的分钟（0-59，默认 0 分）
-    """
     scheduler = get_scheduler()
 
     if not scheduler.running:
