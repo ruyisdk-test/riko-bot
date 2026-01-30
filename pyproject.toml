@@ -1,0 +1,49 @@
+[tool.poetry]
+package-mode = false
+name = "ruyi-packaging"
+version = "0.1.0"
+description = "Ruyi Packaging Bot: Version checker and auto packaging tool for ruyisdk/packages-index"
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/ruyisdk/ruyi-packaging"
+repository = "https://github.com/ruyisdk/ruyi-packaging.git"
+keywords = ["ruyi", "nvchecker", "packaging", "version-check", "automation"]
+authors = ["Ruyi SDK Contributors"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+# Core dependencies
+PyGithub = "^2.1.1"          # GitHub API
+GitPython = "^3.1.0"         # Git repository operations
+semver = "^3.0.0"            # Semantic versioning
+PyYAML = "^6.0.1"            # YAML parsing
+tomli-w = "^1.0.0"           # TOML writing
+tomli = { version = "^1.0.0", python = "<3.11" }  # TOML reading for Python 3.10
+apscheduler = "^3.10.0"     # Task scheduler（定时任务调度器）
+SQLAlchemy = "^2.0.0"        # Database ORM（数据库 ORM）
+# Optional API server dependencies
+fastapi = { version = "^0.100.0", optional = true }  # Web API framework
+uvicorn = { version = "^0.23.0", optional = true }   # ASGI server
+
+[tool.poetry.extras]
+api = ["fastapi", "uvicorn"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.4"            # Unit testing
+black = "^24.2.0"             # Code formatting
+flake8 = "^7.0.0"             # Code linting
+
+[tool.poetry.scripts]
+riko = 'riko.__main__:main'
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
