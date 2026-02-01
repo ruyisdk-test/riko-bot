@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
 from .models import Base, ScanRecord, PackageUpdate, ManifestRecord, PRRecord
+from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +49,11 @@ class DatabaseManager:
 
         # 创建数据库引擎
         # SQLite 连接字符串: sqlite:///path/to/database.db
-        database_url = f"sqlite:///{self.db_path}"
+        # 使用配置的数据库 URL，或者使用默认路径
+        database_url = settings.database_url or f"sqlite:///{self.db_path}"
         self.engine = create_engine(
             database_url,
-            echo=False,  # 关闭 SQL 语句输出（避免日志过多）
+            echo=settings.database_echo,  # 使用配置的 echo 设置
             connect_args={"check_same_thread": False},  # SQLite 特定配置
         )
 
@@ -423,4 +425,7 @@ def get_database(db_path: Optional[str | Path] = None) -> DatabaseManager:
         # 默认数据库路径
         db_path = basedir / "cache" / "riko" / "riko_history.db"
 
-    return DatabaseManager(db_path)
+    db = DatabaseManager(db_path)
+    # 自动创建数据库表（如果不存在）
+    db.create_tables()
+    return db

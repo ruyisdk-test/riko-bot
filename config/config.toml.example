@@ -1,0 +1,59 @@
+# config/config.toml - 配置文件
+
+[app]
+# 应用基础配置
+name="riko"
+version="0.1.0"
+debug=false
+environment="development" # 环境变量 development 或 production
+
+[path]
+# 路径配置
+cache_dir="./cache" # 缓存目录
+base_dir=" "
+
+[data_dirs]
+# 各个子模块的数据目录
+nvchecker="nvchecker" # nvchecker 数据目录
+ruyi="ruyi" # ruyi 数据目录
+riko="riko" # riko 数据目录
+
+[repo]
+# 仓库配置
+use_ruyi_iscas_mirror=true # 是否使用中科院镜像
+ruyi_mirror_url="https://mirrors.iscas.ac.cn/git/ruyisdk/packages-index.git" # ruyi 镜像 URL
+packages_index_url="https://mirror.iscas.ac.cn/git/ruyisdk/packages-index.git" # packages-index 仓库 URL
+
+[nvchecker]
+# nvchecker 配置
+keyfile="nvchecker_keyfile.toml" # nvchecker 密钥文件
+concurrency=20 # 并发数
+max_fails=3 # 最大失败次数
+
+[database]
+# 数据库配置
+url="sqlite:///cache/riko/riko.db" # 数据库 URL
+echo=false # 是否打印 SQL 语句
+
+[schedule]
+# 定时任务配置
+enable=true # 是否启用定时任务
+check_interval_hours=24 # 检查间隔（小时）
+
+[github]
+# GitHub 配置
+token=" " # GitHub 访问令牌
+repo_owner="SmulllLu" # 仓库所有者
+repo_name="packages-index" # 仓库名称
+base_branch="pr" # PR 目标分支
+
+[pr]
+# PR 配置
+branch_prefix="manifest-update" # 功能分支前缀
+
+[logging]
+# 日志配置
+level="INFO" # 日志级别
+file="" # 留空输出到控制台
+max_bytes=10485760 # 日志文件最大大小（字节）
+backup_count=5 # 日志文件备份数量

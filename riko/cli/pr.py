@@ -17,6 +17,7 @@ import shutil
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+from ..config.settings import settings
 
 # GitPython: Git 操作库（类似于 Java's JGit）
 import git
@@ -30,7 +31,7 @@ try:
 except ImportError:
     import tomli as tomllib  # Python 3.10 及以下使用第三方库
 
-from ..config.const import basedir, riko_manifests_dir, nvchecker_key
+from ..config.const import basedir, riko_manifests_dir
 from ..rikoriko import get_riko
 from ..database import record_command  # 数据库记录装饰器
 from ..database import get_recorder  # 数据库记录器
@@ -69,39 +70,20 @@ CORE_DIR = "board-image"
 
 
 # ========== 配置加载 ==========
-def load_riko_config() -> Dict[str, Any]:
-    """
-    从 nvchecker_keyfile 加载 riko 配置
 
-    :return: 配置字典
-    """
-    # 默认配置（类似于 Java 的默认配置类）
-    default_config = {
+def load_riko_config() -> Dict[str, Any]:
+    """从统一配置系统加载 riko 配置"""
+    return {
         "github": {
-            "token": "",  # GitHub Personal Access Token
-            "repo_owner": "SmulllLu",  # 仓库所有者
-            "repo_name": "packages-index",  # 仓库名称
-            "base_branch": "pr"  # PR 目标分支
+            "token": settings.github_token,  # 使用统一配置
+            "repo_owner": settings.github_repo_owner or "SmulllLu",  # 需要在 settings 中添加
+            "repo_name": settings.github_repo_name or "packages-index",  # 需要在 settings 中添加
+            "base_branch": settings.github_base_branch or "pr"  # 需要在 settings 中添加
         },
         "pr": {
-            "branch_prefix": "manifest-update"  # 功能分支前缀
+            "branch_prefix": settings.pr_branch_prefix or "manifest-update"  # 需要在 settings 中添加
         }
     }
-
-    # 如果token配置文件存在，加载 GitHub Token
-    if nvchecker_key.exists():
-        try:
-            # "rb" 模式：二进制读取（tomllib 要求）
-            with open(nvchecker_key, "rb") as f:
-                nv_config = tomllib.load(f)
-            # 使用 .get() 链式安全访问嵌套字典
-            # 类似于 Java's Optional.ofNullable(config).map(c -> c.get("keys")).orElse(new HashMap())
-            default_config["github"]["token"] = nv_config.get("keys", {}).get("github", "")
-            logger.info("Token loaded from config")
-        except Exception as e:
-            logger.warning(f"Failed to load token: {e}")
-
-    return default_config
 
 
 # ========== 清单文件查找 ==========
@@ -204,7 +186,8 @@ def pr(args: argparse.Namespace) -> None:
     recorder = get_recorder()
 
     config = load_riko_config()
-    gh_token = args.github_token or config["github"]["token"] or os.getenv("GITHUB_TOKEN")
+    # settings 已经包含环境变量优先级处理，无需再次调用 os.getenv
+    gh_token = args.github_token or config["github"]["token"]
     repo_owner = args.repo_owner or config["github"]["repo_owner"]
     repo_name = args.repo_name or config["github"]["repo_name"]
     base_branch = args.base_branch or config["github"]["base_branch"]

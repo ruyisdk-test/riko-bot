@@ -3,11 +3,13 @@
 from pathlib import Path
 
 # 导入配置选项
-from .config import use_base_dir, use_ruyi_iscas_repo
+from .config import use_base_dir
+
+from .settings import settings
 
 basedir = Path(__file__).resolve().parent.parent.parent
 
-datadir = basedir / 'cache' if use_base_dir else Path('~/.cache/riko/').expanduser()
+datadir = settings.cache_dir or (basedir / 'cache')
 
 nvchecker_datadir = datadir / 'nvchecker'
 nvchecker_config = nvchecker_datadir / "nvchecker.toml"
@@ -16,7 +18,7 @@ nvchecker_old_ver = nvchecker_datadir / "old_ver.json"
 nvchecker_new_ver = nvchecker_datadir / "new_ver.json"
 nvchecker_key = basedir / "config" / "nvchecker_keyfile.toml"
 
-ruyi_datadir = datadir / 'ruyi'
+ruyi_datadir = datadir / (settings.ruyi_dir or 'ruyi')
 
 ruyi_config_dir = ruyi_datadir / 'config'
 ruyi_data_dir = ruyi_datadir / 'local'
@@ -25,7 +27,7 @@ ruyi_state_dir = ruyi_datadir / 'state'
 
 ruyi_pkgs_dir = basedir / "ruyi_packages"
 
-riko_datadir = datadir / 'riko'
+riko_datadir = datadir / (settings.riko_dir or 'riko')
 riko_cache_dir = riko_datadir / 'cache'
 riko_manifests_dir = riko_datadir / 'manifests'
 
@@ -37,4 +39,4 @@ mode = "local"
 ruyi_config_extra = '''
 [repo]
 remote = "https://mirror.iscas.ac.cn/git/ruyisdk/packages-index.git"
-''' if use_ruyi_iscas_repo else ""
+''' if settings.use_ruyi_iscas_mirror else ""

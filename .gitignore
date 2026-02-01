@@ -14,4 +14,9 @@ poetry.lock
 
 */__pycache__
 
-config/*
+config/nvchecker_keyfile.toml
+config/config.toml
+
+.env
+
+/test

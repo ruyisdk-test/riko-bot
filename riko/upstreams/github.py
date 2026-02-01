@@ -8,14 +8,12 @@ GitHub 上游源实现
 
 import logging
 import re
-import tomllib
 
 from github import Auth, Github
 from typing import ClassVar, Dict, List, Tuple
 
 from .upstream import Upstream
-from ..config.const import nvchecker_key
-
+from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,27 +44,18 @@ class GithubUpstream(Upstream):
             release: Release 版本标签（如 "v1.0.0" 或 "0.20250101.0"）
 
         Note:
-            如果 nvchecker_key 配置文件存在且包含 GitHub token，
-            将使用该 token 进行认证，以提高 API 请求速率限制。
-            否则以未认证模式访问，可能会受到更严格的速率限制。
+            使用统一配置系统中的 GitHub token 进行认证，以提高 API 请求速率限制。
+            如果未配置 token，则以未认证模式访问，可能会受到更严格的速率限制。
         """
         self._release = release
 
-        # 尝试从 nvchecker 配置文件中加载 GitHub token
-        if nvchecker_key.exists() and nvchecker_key.is_file():
-            with open(nvchecker_key, "rb") as kf:
-                key = tomllib.load(kf).get("keys")
-                if key is not None:
-                    key = key.get("github")
-
-            # 如果找到 token，使用认证模式；否则使用未认证模式
-            if key is not None:
-                self._github = Github(auth=Auth.Token(key))
-            else:
-                self._github = Github()
-
+        # 使用统一配置系统获取 GitHub token
+        token = settings.github_token
+        if token:
+            self._github = Github(auth=Auth.Token(token))
+            logger.info("Using GitHub token for authentication")
         else:
-            logger.warning(f"nvchecker keyfile {nvchecker_key} not found.")
+            logger.warning("No GitHub token configured, using unauthenticated mode")
             self._github = Github()
 
         # 获取目标仓库对象
