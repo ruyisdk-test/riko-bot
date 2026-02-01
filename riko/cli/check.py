@@ -14,15 +14,15 @@ from ..database import get_recorder  # 添加记录器导入
 
 logger = logging.getLogger(__name__)
 
-
+# 确保路径存在
 def _ensure_riko_path() -> None:
     ensure_dir(riko_datadir)
 
-
+# 确保 nvchecker 路径存在
 def _ensure_nvchecker_path() -> None:
     ensure_dir(nvchecker_datadir)
 
-
+# 确保 ruyi 路径存在
 def _ensure_ruyi_path() -> None:
     ensure_dir(ruyi_datadir)
     ensure_dir(ruyi_config_dir)
@@ -31,24 +31,25 @@ def _ensure_ruyi_path() -> None:
     ensure_dir(ruyi_cache_dir)
     ensure_dir(ruyi_state_dir)
 
-
+# 确保所有路径存在
 def _ensure_paths() -> None:
     _ensure_riko_path()
     _ensure_nvchecker_path()
     _ensure_ruyi_path()
 
-
+# 确保 nvchecker 环境变量存在
 def _ensure_nvchecker_env(env: Dict) -> None:
     env['PYTHONPATH'] = str(basedir)
 
 
+# 确保 ruyi 环境变量存在
 def _ensure_ruyi_env(env: Dict) -> None:
     env['XDG_CONFIG_HOME'] = str(ruyi_config_dir)
     env['XDG_DATA_HOME'] = str(ruyi_data_dir)
     env['XDG_CACHE_HOME'] = str(ruyi_cache_dir)
     env['XDG_STATE_HOME'] = str(ruyi_state_dir)
 
-
+# 检查环境
 @record_command("check")
 def check() -> None:
     _ensure_paths()
