@@ -8,12 +8,12 @@ import tomli_w
 from typing import Dict, List
 
 # 导入配置常量（需要在 rikoriko 中使用的路径）
-from .config.const import ruyi_cache_dir, nvchecker_config, nvchecker_result, nvchecker_old_ver, nvchecker_new_ver, \
+from ..config.const import ruyi_cache_dir, nvchecker_config, nvchecker_result, nvchecker_old_ver, nvchecker_new_ver, \
     ruyi_pkgs_dir
-from .nvchecker.results import NvcheckerResults
-from .packages_index.packages_index import PackagesIndex
-from .packages_index.manifests import PackageVersion
-from .ruyi_packages.ruyi_packages import RuyiPackages, UpstreamConfig
+from ..nvchecker.results import NvcheckerResults
+from ..packages_index.packages_index import PackagesIndex
+from ..packages_index.manifests import PackageVersion
+from ..ruyi_packages.ruyi_packages import RuyiPackages, UpstreamConfig
 
 logger = logging.getLogger(__name__)
 

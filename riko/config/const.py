@@ -2,9 +2,6 @@
 
 from pathlib import Path
 
-# 导入配置选项
-from .config import use_base_dir
-
 from .settings import settings
 
 basedir = Path(__file__).resolve().parent.parent.parent

@@ -9,11 +9,11 @@ from typing import List, Dict, Any
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from .cli.check import check
-from .cli.manifests import manifests
-from .cli.pr import pr
-from .rikoriko import get_riko
-from riko.database import get_recorder
+from ..interfaces.cli.check import check
+from ..interfaces.cli.manifests import manifests
+from ..interfaces.cli.pr import pr
+from ..core import get_riko
+from ..database import get_recorder
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ def scheduler_status() -> Dict[str, Any]:
 #    b. 创建 PR（TODO: 需要集成数据库记录）
 #    c. 记录失败（如果失败）
 # 5. 完成顶层扫描
-# ========== 核心任务：每日检查和 PR 创建 ==========
+# 每日检查和 PR 创建
 def daily_check_and_pr() -> None:
     # 导入数据库记录器（支持嵌套调用）
 
@@ -95,12 +95,12 @@ def daily_check_and_pr() -> None:
     logger.info("=" * 70)
 
     try:
-        # ========== 步骤 1: 执行版本检查（内部会自动记录） ==========
+        # 执行版本检查（内部会自动记录）
         logger.info("[Step 1/3] Running version check...")
         check()
         logger.info("[Step 1/3] ✓ Version check completed")
 
-        # ========== 步骤 2: 获取有更新的包 ==========
+        # 获取有更新的包
         logger.info("[Step 2/3] Getting updated packages...")
         riko = get_riko()
         updated_results = riko.get_nvchecker_results("updated")
@@ -122,7 +122,7 @@ def daily_check_and_pr() -> None:
         for result in updated_results:
             logger.info(f"  - {result['name']}: {result.get('old_version')} → {result['version']}")
 
-        # ========== 步骤 3: 为每个包生成 manifests 并创建 PR ==========
+        # 为每个包生成 manifests 并创建 PR
         logger.info("[Step 3/3] Processing updated packages...")
         success_count = 0
         failed_packages = []
@@ -134,12 +134,12 @@ def daily_check_and_pr() -> None:
             logger.info(f"  [{success_count + 1}/{len(updated_results)}] {package_name}")
 
             try:
-                # 3.1 生成 manifests（内部会自动记录）
+                # 生成 manifests（内部会自动记录）
                 logger.info(f"    → Generating manifests...")
                 manifests(package_name, [new_version], down_grade=False)
                 logger.info(f"    ✓ Manifests generated")
 
-                # 3.2 创建 PR（内部会自动记录，支持嵌套调用）
+                # 创建 PR（内部会自动记录，支持嵌套调用）
                 logger.info(f"    → Creating PR...")
                 from argparse import Namespace
                 args = Namespace(
@@ -162,7 +162,7 @@ def daily_check_and_pr() -> None:
                 # 统计失败数量
                 failed_packages.append(package_name)
 
-        # ========== 完成顶层扫描 ==========
+        # 完成顶层扫描
         recorder.finish_scan(
             status="completed" if not failed_packages else "partial_success",
             total_packages=len(updated_results),
@@ -199,7 +199,7 @@ def daily_check_and_pr() -> None:
         )
         raise
 
-# ========== CLI 命令 ==========
+# CLI 命令
 
 # 立即触发任务（CLI 命令）
 def cmd_scheduler_trigger():
@@ -208,7 +208,7 @@ def cmd_scheduler_trigger():
     print("Task completed.")
 
 
-# ========== 调度器辅助函数 ==========
+# 调度器辅助函数
 
 def run_scheduler_daemon(hour: int = 2, minute: int = 0) -> None:
     """

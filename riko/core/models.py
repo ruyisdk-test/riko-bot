@@ -18,9 +18,9 @@ import semver
 
 from typing import Dict, Tuple, Union
 
-from .packages_index.manifests import PackageVersion
-from .upstreams.github import GithubUpstream
-from .upstreams.regex import RegexUpstream
+from ..packages_index.manifests import PackageVersion
+from ..upstreams.github import GithubUpstream
+from ..upstreams.regex import RegexUpstream
 
 # 导出公共 API
 __all__ = ("GithubUpstream", "RegexUpstream", "RikoPkg")
@@ -47,33 +47,6 @@ class RikoPkg(PackageVersion):
         _upstream_name: 上游包名（如：openwrt-sifiveu）
         _upstream: 上游源对象（GithubUpstream 或 RegexUpstream）
         _manifest_ready: 清单是否准备就绪（用于控制是否写入文件）
-
-    使用示例：
-        >>> import semver
-        >>> from riko.api import RikoPkg
-        >>>
-        >>> # 创建一个包对象
-        >>> pkg = RikoPkg(
-        ...     category="board-image",
-        ...     combo="openwrt-sifive-unmatched",
-        ...     up_name="openwrt-sifiveu",
-        ...     version=semver.Version.parse("0.2410.5"),
-        ...     upstream_version="0.2410.5",
-        ...     upstream=GithubUpstream(...)
-        ... )
-        >>>
-        >>> # 设置清单数据
-        >>> manifest_data = {"metadata": {...}, "distfiles": [...]}
-        >>> pkg.set_manifest(manifest_data)
-        >>>
-        >>> # 标记清单就绪
-        >>> pkg.set_manifest_ready()
-        >>>
-        >>> # 获取信息
-        >>> pkg.get_category()  # 'board-image'
-        >>> pkg.get_combo()  # 'openwrt-sifive-unmatched'
-        >>> pkg.get_version()  # Version(0.2410.5)
-        >>> pkg.get_manifest_ready()  # True
     """
 
     def __init__(self, category: str, combo: str, up_name: str,
@@ -111,14 +84,6 @@ class RikoPkg(PackageVersion):
         provisionable 等所有字段。
 
         :param manifest: 清单字典数据
-
-        使用示例：
-            >>> manifest = {
-            ...     "format": "v1",
-            ...     "metadata": {"desc": "..."},
-            ...     "distfiles": [...]
-            ... }
-            >>> pkg.set_manifest(manifest)
         """
         super().set_manifest(manifest)
 
@@ -155,14 +120,6 @@ class RikoPkg(PackageVersion):
         获取清单就绪状态
 
         :return: True 表示清单就绪可以写入，False 表示未就绪
-
-        使用示例：
-            >>> if pkg.get_manifest_ready():
-            >>>     # 写入文件
-            >>>     write_toml(pkg)
-            >>> else:
-            >>>     # 跳过写入
-            >>>     logger.warning("Manifest not ready")
         """
         return self._manifest_ready
 
@@ -202,13 +159,6 @@ class RikoPkg(PackageVersion):
             - is_ready: 清单是否就绪
 
         使用示例：
-            >>> manifest, ready = pkg.get_manifest()
-            >>> if ready:
-            >>>     # 清单就绪，可以写入文件
-            >>>     write_toml(manifest)
-            >>> else:
-            >>>     # 清单未就绪，需要进一步处理或验证
-            >>>     pass
         """
         return super().get_manifest(), self._manifest_ready
 
@@ -219,14 +169,6 @@ class RikoPkg(PackageVersion):
         :return: semver.Version 对象，可用于版本比较和操作
 
         使用示例：
-            >>> version = pkg.get_version()
-            >>> print(f"Major: {version.major}")
-            >>> print(f"Minor: {version.minor}")
-            >>> print(f"Patch: {version.patch}")
-            >>>
-            >>> # 版本比较
-            >>> if version > semver.Version.parse("0.1.0"):
-            >>>     print("Version is greater than 0.1.0")
         """
         return super().get_version()
 
@@ -254,13 +196,6 @@ class RikoPkg(PackageVersion):
         :return: GithubUpstream 或 RegexUpstream 对象，如果没有则返回 None
 
         使用示例：
-            >>> upstream = pkg.get_upstream()
-            >>> if isinstance(upstream, GithubUpstream):
-            >>>     # GitHub 相关操作
-            >>>     asset_url = upstream.get_release_asset_url(...)
-            >>> elif isinstance(upstream, RegexUpstream):
-            >>>     # 正则匹配相关操作
-            >>>     matched = upstream.get_release_assert_regex(...)
         """
         return self._upstream
 

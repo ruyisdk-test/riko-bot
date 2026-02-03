@@ -14,9 +14,11 @@
 - 🗄️ **Database Storage**: Track scan history and package updates
 - 🌐 **REST API**: Optional FastAPI server for web integration
 - ⚙️ **Configuration Management**: Unified configuration via TOML files and environment variables
+- 🏗️ **Three-tier Architecture**: Clean separation of concerns with core, services, and interfaces layers
 
 ## Table of Contents
 
+- [Architecture](#architecture)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage](#usage)
@@ -25,6 +27,112 @@
 - [Dependencies](#dependencies)
 - [Development](#development)
 - [License](#license)
+
+## Architecture
+
+Riko follows a **three-tier architecture** pattern for clean separation of concerns:
+
+```
+┌──────────────────────────────────────────────┐
+│         interfaces/ (接口层)                  │
+│  CLI (interfaces/cli/)  API (interfaces/api/)│
+│  - User interaction                          │
+│  - Request handling                          │
+└──────────────────┬───────────────────────────┘
+                   │ 依赖
+                   ▼
+┌─────────────────────────────────────────────┐
+│         services/ (服务层)                   │
+│  - Business logic orchestration             │
+│  - Service coordination                     │
+│  - Workflow management                      │
+└──────────────────┬──────────────────────────┘
+                   │ 依赖
+                   ▼
+┌─────────────────────────────────────────────┐
+│          core/ (核心层)                      │
+│  - Domain models                            │
+│  - Business rules                           │
+│  - Data access objects                      │
+└──────────────────┬──────────────────────────┘
+                   │ 依赖
+                   ▼
+┌─────────────────────────────────────────────┐
+│        基础模块                              │
+│  config, database, nvchecker,               │
+│  packages_index, ruyi_packages, upstreams   │
+└─────────────────────────────────────────────┘
+```
+
+### Layer Responsibilities
+
+**Core Layer (`riko/core/`)**
+- Defines domain models (`RikoPkg`, `GithubUpstream`, `RegexUpstream`)
+- Contains the main `Riko` business class
+- Manages data access and business rules
+- No dependencies on services or interfaces
+
+**Services Layer (`riko/services/`)**
+- Orchestrates business workflows
+- Coordinates between core components
+- Implements command patterns with database recording
+- Examples: `CheckService`, `ManifestService`, `PRService`, `SchedulerService`
+
+**Interfaces Layer (`riko/interfaces/`)**
+- **CLI** (`interfaces/cli/`): Command-line interface
+- **API** (`interfaces/api/`): REST API with FastAPI
+- Handles user input and output
+- Delegates business logic to services layer
+
+### Project Structure
+
+```
+riko-packaging/
+├── riko/
+│   ├── core/                      # 【核心层】业务逻辑和数据模型
+│   │   ├── riko.py               # 核心业务类
+│   │   └── models.py             # 数据模型
+│   │
+│   ├── services/                  # 【服务层】业务服务编排
+│   │   ├── check_service.py      # 版本检查服务
+│   │   ├── manifest_service.py   # 清单生成服务
+│   │   ├── pr_service.py         # PR 创建服务
+│   │   └── scheduler_service.py  # 调度器服务
+│   │
+│   ├── interfaces/                # 【接口层】外部接口
+│   │   ├── cli/                  # CLI 命令
+│   │   │   ├── check.py
+│   │   │   ├── list.py
+│   │   │   ├── manifests.py
+│   │   │   ├── pr.py
+│   │   │   └── utils.py
+│   │   │
+│   │   └── api/                  # Web API
+│   │       ├── app.py            # FastAPI 应用
+│   │       ├── routes/           # 路由模块
+│   │       │   ├── check_routes.py
+│   │       │   ├── manifest_routes.py
+│   │       │   ├── pr_routes.py
+│   │       │   └── scheduler_routes.py
+│   │       └── models/
+│   │           └── schemas.py     # Pydantic 模型
+│   │
+│   ├── config/                    # 配置模块
+│   ├── database/                  # 数据库模块
+│   ├── nvchecker/                 # 版本检查模块
+│   ├── packages_index/            # 包索引模块
+│   ├── ruyi_packages/             # Ruyi 包模块
+│   ├── upstreams/                 # 上游源模块
+│   ├── __init__.py
+│   └── __main__.py               # CLI 入口
+│
+├── config/                        # 配置文件模板
+├── docs/                          # 文档
+│   └── refactoring_report.md    # 重构报告
+├── .env.example                   # 环境变量模板
+├── pyproject.toml                # 项目配置
+└── README.md                     # 本文件
+```
 
 ## Installation
 
@@ -45,9 +153,6 @@ cd ruyi-packaging
 # Install dependencies using Poetry (recommended)
 poetry install
 
-# Or using pip
-pip install -e .
-
 # Optional: Install API server dependencies
 poetry install --extras api
 # or
@@ -57,6 +162,7 @@ pip install -e ".[api]"
 ### Verify Installation
 
 ```bash
+# Run riko directly
 python3 -m riko --help
 ```
 
@@ -67,39 +173,6 @@ Riko supports multiple configuration methods with the following priority (highes
 1. **Environment Variables** (highest priority)
 2. **Configuration File** (`config/config.toml`)
 3. **Default Values** (in code)
-
-### Configuration File
-
-Copy the example configuration file and customize it:
-
-```bash
-cp config/config.toml.default config/config.toml
-```
-
-Example `config/config.toml`:
-
-```toml
-[app]
-name = "riko"
-version = "0.1.0"
-debug = false
-environment = "development"
-
-[github]
-token = "your_github_token_here"
-repo_owner = "your_username"
-repo_name = "packages-index"
-base_branch = "pr"
-
-[database]
-url = "sqlite:///cache/riko/riko.db"
-echo = false
-
-[nvchecker]
-keyfile = "nvchecker_keyfile.toml"
-concurrency = 20
-max_fails = 3
-```
 
 ### Environment Variables
 
@@ -116,6 +189,7 @@ Key environment variables:
 GITHUB_TOKEN=your_github_token_here
 GITHUB_REPO_OWNER=your_username
 GITHUB_REPO_NAME=packages-index
+GITHUB_BASE_BRANCH=pr
 
 # Database
 DATABASE_URL=sqlite:///cache/riko/riko.db
@@ -123,6 +197,13 @@ DATABASE_URL=sqlite:///cache/riko/riko.db
 # Application
 RIKO_ENV=development
 RIKO_DEBUG=false
+
+# Telegram Bot (optional)
+TELEGRAM_TOKEN=your_bot_token
+
+# Proxy (optional, for accessing Telegram API in mainland China)
+HTTP_PROXY=http://127.0.0.1:7890
+HTTPS_PROXY=http://127.0.0.1:7890
 ```
 
 See [`.env.example`](.env.example) for all available options.
@@ -132,6 +213,13 @@ See [`.env.example`](.env.example) for all available options.
 ### CLI Commands
 
 Riko provides several commands for version checking, manifest generation, and PR automation.
+
+#### Running Commands
+
+```bash
+# Run riko commands
+python3 -m riko <command>
+```
 
 #### `riko check`
 
@@ -149,13 +237,13 @@ This command:
 
 **Example output:**
 ```
-INFO:riko.cli.check:run `ruyi update`
-INFO:riko.cli.check:prepare for `nvchecker`
-INFO:riko.cli.check:run `nvchecker`
+INFO:riko.services.check_service:run `ruyi update`
+INFO:riko.services.check_service:prepare for `nvchecker`
+INFO:riko.services.check_service:run `nvchecker`
 [I 02-01 16:36:44.039 core:416] ubuntu-cdimage: updated from 25.04 to 26.04
 [I 02-01 16:36:44.055 core:416] openwrt-sifiveu: updated from 24.10.4 to 24.10.5
-INFO:riko.cli.check:[DB] Recorded 17 package checks (4 updated)
-INFO:riko.cli.check:Check completed successfully
+INFO:riko.services.check_service:[DB] Recorded 17 package checks (4 updated)
+INFO:riko.services.check_service:Check completed successfully
 ```
 
 #### `riko list`
@@ -261,258 +349,14 @@ Riko includes an optional FastAPI server for REST API access.
 #### Start the Server
 
 ```bash
-# Using uvicorn directly
-uvicorn riko.app:app --reload --host 0.0.0.0 --port 8000
-
-# Or using Python module
-python3 -m uvicorn riko.app:app --reload --host 0.0.0.0 --port 8000
+# Using Python module
+python3 -m uvicorn riko.interfaces.api.app:app --reload --host 0.0.0.0 --port 7777
 ```
 
-The API will be available at `http://localhost:8000`
+The API will be available at `http://localhost:7777`
 
-#### API Documentation
-
-Once the server is running, access:
-- **Swagger UI**: `http://localhost:8000/docs`
-- **ReDoc**: `http://localhost:8000/redoc`
-- **OpenAPI JSON**: `http://localhost:8000/openapi.json`
-
-#### API Endpoints
-
-##### GET /check
-
-Trigger version check and return results:
-
-```bash
-curl http://localhost:8000/check
-```
-
-**Response:**
-```json
-{
-  "total": 17,
-  "updated": 4,
-  "up_to_date": 13,
-  "errors": 0,
-  "packages": [
-    {
-      "name": "ubuntu-cdimage",
-      "old_version": "25.04",
-      "new_version": "26.04",
-      "status": "updated"
-    }
-  ]
-}
-```
-
-##### POST /manifests/{package_name}
-
-Generate manifests for a package:
-
-```bash
-curl -X POST "http://localhost:8000/manifests/LicheeRV-Nano-Build" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "versions": ["20260114"],
-    "down_grade": false
-  }'
-```
-
-**Response:**
-```json
-{
-  "package_name": "LicheeRV-Nano-Build",
-  "combo_name": "licheerv-nano-build",
-  "version": "20260114",
-  "status": "success",
-  "manifest_path": "/path/to/manifest.toml"
-}
-```
-
-##### POST /pr/{package_name}
-
-Create a pull request:
-
-```bash
-curl -X POST "http://localhost:8000/pr/LicheeRV-Nano-Build" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "branch_prefix": "manifest-update",
-    "base_branch": "pr"
-  }'
-```
-
-**Response:**
-```json
-{
-  "package_name": "LicheeRV-Nano-Build",
-  "status": "success",
-  "pr_number": 123,
-  "pr_url": "https://github.com/ruyisdk/packages-index/pull/123"
-}
-```
-
-##### POST /scheduler/start
-
-Start the automated scheduler:
-
-```bash
-curl -X POST "http://localhost:8000/scheduler/start" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "hour": 2,
-    "minute": 0
-  }'
-```
-
-##### POST /scheduler/stop
-
-Stop the scheduler:
-
-```bash
-curl -X POST "http://localhost:8000/scheduler/stop"
-```
-
-##### GET /scheduler/status
-
-Get scheduler status:
-
-```bash
-curl http://localhost:8000/scheduler/status
-```
-
-**Response:**
-```json
-{
-  "running": true,
-  "next_run": "2026-02-02T02:00:00",
-  "last_check": "2026-02-01T02:00:00"
-}
-```
-
-##### POST /scheduler/trigger
-
-Manually trigger the daily check and PR task:
-
-```bash
-curl -X POST "http://localhost:8000/scheduler/trigger"
-```
-
-#### Python Client Example
-
-```python
-import requests
-
-# Base URL
-base_url = "http://localhost:8000"
-
-# Check for updates
-response = requests.get(f"{base_url}/check")
-print(response.json())
-
-# Generate manifests
-response = requests.post(
-    f"{base_url}/manifests/LicheeRV-Nano-Build",
-    json={"versions": ["20260114"]}
-)
-print(response.json())
-
-# Create PR
-response = requests.post(
-    f"{base_url}/pr/LicheeRV-Nano-Build"
-)
-print(response.json())
-```
-
-## Dependencies
-
-### Python Dependencies
-
-See [`pyproject.toml`](pyproject.toml) for the complete list:
-
-**Core dependencies:**
-- `PyGithub` - GitHub API client
-- `GitPython` - Git operations
-- `semver` - Semantic versioning
-- `PyYAML` - YAML parsing
-- `tomli` / `tomli-w` - TOML parsing
-- `apscheduler` - Task scheduling
-- `SQLAlchemy` - Database ORM
-- `python-dotenv` - Environment variable management
-
-**Optional (API server):**
-- `fastapi` - Web framework
-- `uvicorn` - ASGI server
-
-### External Tools
-
-- **nvchecker** - New version checker
-  ```bash
-  pip install nvchecker
-  ```
-
-- **ruyi** - Ruyi SDK package manager
-  ```bash
-  # Follow installation instructions at:
-  # https://github.com/ruyisdk/ruyi
-  ```
-
-- **Git** - Version control system
-  ```bash
-  # Ubuntu/Debian
-  sudo apt-get install git
-
-  # Fedora/RHEL
-  sudo dnf install git
-
-  # macOS
-  brew install git
-  ```
-
-## Development
-
-### Project Structure
-
-```
-riko-packaging/
-├── riko/
-│   ├── __main__.py          # CLI entry point
-│   ├── app.py               # FastAPI application
-│   ├── api.py               # Core API models
-│   ├── cli/                 # CLI commands
-│   │   ├── check.py
-│   │   ├── list.py
-│   │   ├── manifests.py
-│   │   └── pr.py
-│   ├── config/              # Configuration management
-│   │   ├── settings.py      # Unified settings
-│   │   └── const.py         # Constants
-│   ├── database/            # Database layer
-│   │   ├── models.py        # SQLAlchemy models
-│   │   ├── db_manager.py    # Database manager
-│   │   └── recorder.py      # Command recorder
-│   ├── scheduler.py         # Task scheduler
-│   └── ...
-├── config/
-│   └── config.toml.default  # Configuration template
-├── .env.example             # Environment variables template
-├── pyproject.toml           # Project configuration
-└── README.md                # This file
-```
-
-### Database
-
-The project uses SQLAlchemy for database management. By default, it stores data in:
-- SQLite: `cache/riko/riko.db`
-
-Database tables:
-- `scan_records` - Scan history
-- `package_updates` - Version update records
-- `manifest_records` - Manifest generation records
-- `pr_records` - Pull request records
 
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details
-

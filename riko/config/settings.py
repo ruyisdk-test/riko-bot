@@ -18,51 +18,54 @@ load_dotenv()
 
 @dataclass
 class Settings:
-    # ========== 应用配置 ==========
+    # 应用配置
     app_name: str = "riko"
     app_version: str = "0.1.0"
     app_debug: bool = False
     app_environment: str = "development"
 
-    # ========== 路径配置 ==========
+    # 路径配置
     cache_dir: str = None
     base_dir: str = None
 
-    # ========== 数据目录配置 ==========
+    # 数据目录配置
     nvchecker_dir: str = "nvchecker"
     ruyi_dir: str = "ruyi"
     riko_dir: str = "riko"
 
-    # ========== GitHub 配置 ==========
+    # GitHub 配置
     github_token: str = ""
     github_repo_owner: str = "SmulllLu"
     github_repo_name: str = "packages-index"
     github_base_branch: str = "pr"
     pr_branch_prefix: str = "manifest-update"
 
-    # ========== 仓库 URL 配置 ==========
+    # 仓库 URL 配置
     packages_index_url: str = "https://mirror.iscas.ac.cn/git/ruyisdk/packages-index.git"
     use_ruyi_iscas_mirror: bool = True
     ruyi_mirror_url: str = "https://mirrors.iscas.ac.cn/git/ruyisdk/packages-index.git"
 
-    # ========== 数据库配置 ==========
+    # 数据库配置
     database_url: str = "sqlite:///cache/riko/riko.db"
     database_echo: bool = False
 
-    # ========== nvchecker 配置 ==========
+    # nvchecker 配置
     nvchecker_keyfile: str = "nvchecker_keyfile.toml"
     nvchecker_concurrency: int = 20
     nvchecker_max_fails: int = 3
 
-    # ========== 日志配置 ==========
+    # 日志配置
     logging_level: str = "INFO"
     logging_file: str = ""
     logging_max_bytes: int = 10485760
     logging_backup_count: int = 5
 
-    # ========== 定时任务配置 ==========
+    # 定时任务配置
     schedule_enable: bool = True
     schedule_check_interval_hours: int = 24
+
+    # Telegram 配置
+    telegram_token: str = ""
     @classmethod
     def load(cls) -> 'Settings':
         """加载配置，按优先级合并"""
@@ -200,6 +203,12 @@ class Settings:
                 if "backup_count" in logging_config:
                     result["logging_backup_count"] = logging_config["backup_count"]
 
+            # [telegram] 节
+            if "telegram" in config:
+                telegram = config["telegram"]
+                if "token" in telegram:
+                    result["telegram_token"] = telegram["token"]
+
             return result
         except Exception as e:
             print(f"Warning: Failed to load config file {config_file}: {e}")
@@ -251,6 +260,9 @@ class Settings:
             # 日志配置
             "logging_level": os.getenv("LOGGING_LEVEL", "INFO"),
             "logging_file": os.getenv("LOGGING_FILE", ""),
+
+            # Telegram 配置
+            "telegram_token": os.getenv("TELEGRAM_TOKEN", ""),
         }
 
     def validate(self):

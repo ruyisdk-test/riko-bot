@@ -5,12 +5,12 @@ import logging
 import sys
 
 # 导入各子命令的实现函数
-from riko.cli.check import check
-from riko.cli.list import list_result
-from riko.cli.manifests import manifests
-from riko.cli.pr import pr
-from riko.rikoriko import get_riko
-from riko.scheduler import (
+from riko.interfaces.cli.check import check
+from riko.interfaces.cli.list import list_result
+from riko.interfaces.cli.manifests import manifests
+from riko.interfaces.cli.pr import pr
+from riko.core import get_riko
+from riko.services.scheduler_service import (
     stop_scheduler,
     scheduler_status,
     cmd_scheduler_trigger,
@@ -21,7 +21,8 @@ from riko.scheduler import (
 logging.basicConfig(level=logging.INFO)
 
 
-if __name__ == '__main__':
+def main():
+    """Riko CLI 主入口函数"""
 
     myriko = get_riko()
     myriko.load_from_cache()
@@ -77,3 +78,7 @@ if __name__ == '__main__':
     else:
         myfunc = parser.parse_args()
         myfunc.func(myfunc)
+
+
+if __name__ == '__main__':
+    main()

@@ -5,7 +5,7 @@ import sys
 
 from typing import Dict, List
 
-from ..rikoriko import get_riko
+from ...core import get_riko
 
 
 def list_result(event: str) -> None:
