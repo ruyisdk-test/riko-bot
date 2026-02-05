@@ -16,6 +16,7 @@ from riko.services.scheduler_service import (
     cmd_scheduler_trigger,
     run_scheduler_daemon,
 )
+from riko.interfaces.cli.telegramBot import telegramBot
 
 # 配置日志级别
 logging.basicConfig(level=logging.INFO)
@@ -72,6 +73,9 @@ def main():
     status_parser.set_defaults(func=lambda args: print(scheduler_status()))
     trigger_parser = scheduler_subparsers.add_parser("trigger", help="手动触发每日检查和 PR 任务")
     trigger_parser.set_defaults(func=lambda args: cmd_scheduler_trigger())
+
+    subparser = subparsers.add_parser("telegram-bot", help="启动 Telegram 机器人")
+    subparser.set_defaults(func=lambda args: telegramBot())
 
     if len(sys.argv) == 1:
         parser.print_help()

@@ -94,10 +94,11 @@ riko-packaging/
 │   │   └── models.py             # 数据模型
 │   │
 │   ├── services/                  # 【服务层】业务服务编排
-│   │   ├── check_service.py      # 版本检查服务
-│   │   ├── manifest_service.py   # 清单生成服务
-│   │   ├── pr_service.py         # PR 创建服务
-│   │   └── scheduler_service.py  # 调度器服务
+│   │   ├── check_service.py       # 版本检查服务
+│   │   ├── manifest_service.py    # 清单生成服务
+│   │   ├── pr_service.py          # PR 创建服务
+│   │   └── scheduler_service.py   # 调度器服务
+│   │   └── telegramBot_service.py # Telegram 机器人服务
 │   │
 │   ├── interfaces/                # 【接口层】外部接口
 │   │   ├── cli/                  # CLI 命令
@@ -113,7 +114,8 @@ riko-packaging/
 │   │       │   ├── check_routes.py
 │   │       │   ├── manifest_routes.py
 │   │       │   ├── pr_routes.py
-│   │       │   └── scheduler_routes.py
+│   │       │   └── scheduler_routes.py 
+│   │       │   └── telegramBot_routes.py 
 │   │       └── models/
 │   │           └── schemas.py     # Pydantic 模型
 │   │

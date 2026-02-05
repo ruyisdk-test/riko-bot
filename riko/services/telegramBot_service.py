@@ -35,7 +35,6 @@ def get_proxy_config():
     """
     支持以下环境变量：
     - HTTP_PROXY / HTTPS_PROXY: HTTP 代理
-    - SOCKS_PROXY: SOCKS5 代理
     - NO_PROXY: 不使用代理的地址
 
     Returns:
@@ -67,7 +66,6 @@ def get_bot() -> Bot:
         if not settings.telegram_token:
             raise ValueError("未配置 TELEGRAM_TOKEN")
 
-        # 参考: https://docs.python-telegram-bot.org/en/v20.8/telegram.bot.html
         # 创建 Bot 实例，支持代理
         # 获取代理配置
         proxy_url = get_proxy_config()
@@ -99,8 +97,7 @@ def get_bot() -> Bot:
 # 发送 Telegram 消息（用于程序化通知）
 async def send_message(message: str, chat_id: int = None) -> bool:
     """
-    使用 python-telegram-bot 的 Bot.send_message() 方法，而不是手动调用 HTTP API
-    参考: https://docs.python-telegram-bot.org/en/v20.8/telegram.bot.html#telegram.Bot.send_message
+    使用 python-telegram-bot 的 Bot.send_message() 方法
 
     Args:
         message: 要发送的消息内容
@@ -128,11 +125,6 @@ async def send_message(message: str, chat_id: int = None) -> bool:
         return False
 
     try:
-        # 使用 python-telegram-bot 的 Bot.send_message() 方法
-        # 这个方法会自动处理：
-        # 1. HTTP 请求构建
-        # 2. 错误处理和重试
-        # 3. 响应解析
         bot = get_bot()
 
         # 发送消息，使用 Markdown 格式
@@ -239,15 +231,13 @@ async def error(update: Update, context) -> None:
     logger.warning('Update "%s" caused error "%s"', update, context.error)
 
 
-def main():
+def telegramBotService():
     """
     启动 Telegram Bot
 
     使用 ApplicationBuilder 和 run_polling 来运行 Bot
-    参考: https://docs.python-telegram-bot.org/en/v20.8/telegram.ext.application.html
     """
     # 创建 Application 构建器
-    # 参考: https://docs.python-telegram-bot.org/en/v20.8/telegram.ext.applicationbuilder.html
     builder = ApplicationBuilder().token(settings.telegram_token)
 
     # 配置代理
@@ -269,19 +259,15 @@ def main():
     application = builder.build()
 
     # 添加命令处理程序
-    # CommandHandler: https://docs.python-telegram-bot.org/en/v20.8/telegram.ext.commandhandler.html
     application.add_handler(CommandHandler("start", start))
 
-    # 添加消息处理程序（非命令文本消息）
-    # MessageHandler: https://docs.python-telegram-bot.org/en/v20.8/telegram.ext.messagehandler.html
+    # 添加消息处理程序（非命令文本消息
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
     # 添加错误处理程序
-    # add_error_handler: https://docs.python-telegram-bot.org/en/v20.8/telegram.ext.application.html#telegram.ext.Application.add_error_handler
     application.add_error_handler(error)
 
     # 启动机器人
-    # run_polling: https://docs.python-telegram-bot.org/en/v20.8/telegram.ext.application.html#telegram.ext.Application.run_polling
     logger.info("Starting Telegram Bot...")
     logger.info("如果连接失败，请检查：")
     logger.info("1. 网络连接是否正常")
@@ -294,7 +280,3 @@ def main():
         logger.error(f"Bot 启动失败: {e}")
         logger.error("提示: 在中国大陆，需要配置代理才能访问 Telegram API")
         raise
-
-
-if __name__ == '__main__':
-    main()
