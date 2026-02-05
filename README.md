@@ -15,6 +15,7 @@
 - 🌐 **REST API**: Optional FastAPI server for web integration
 - ⚙️ **Configuration Management**: Unified configuration via TOML files and environment variables
 - 🏗️ **Three-tier Architecture**: Clean separation of concerns with core, services, and interfaces layers
+- 🤖 **Telegram Bot**: Integrated Telegram bot for package updates and notifications
 
 ## Table of Contents
 
@@ -343,6 +344,19 @@ python3 -m riko scheduler trigger
 - Automatic PR creation for updated packages
 - Configurable execution time
 - Status monitoring and manual triggering
+
+#### `riko telegram-bot`
+
+Start the telegram-bot service:
+
+```bash
+# Start telegram-bot
+python3 -m riko telegram-bot
+
+```
+This command:
+1. It can allow upstream services to update and notify on Telegram at scheduled times
+2. Enters the bot into a polling loop to listen for messages
 
 ### FastAPI Server
 
