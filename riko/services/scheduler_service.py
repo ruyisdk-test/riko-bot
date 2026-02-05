@@ -1,5 +1,6 @@
 # riko/scheduler.py - 定时任务调度器
 
+import asyncio
 import logging
 import signal
 import sys
@@ -13,7 +14,10 @@ from ..interfaces.cli.check import check
 from ..interfaces.cli.manifests import manifests
 from ..interfaces.cli.pr import pr
 from ..core import get_riko
-from ..database import get_recorder
+from ..database import get_recorder, set_trigger_source
+from ..services.check_service import CheckService
+from ..services.manifest_service import ManifestService
+from ..services.pr_service import PRService
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +88,9 @@ def scheduler_status() -> Dict[str, Any]:
 def daily_check_and_pr() -> None:
     # 导入数据库记录器（支持嵌套调用）
 
+    # 设置触发源上下文（确保所有嵌套调用都继承此设置）
+    set_trigger_source("scheduler")
+
     # 初始化记录器
     recorder = get_recorder()
 
@@ -95,9 +102,9 @@ def daily_check_and_pr() -> None:
     logger.info("=" * 70)
 
     try:
-        # 执行版本检查（内部会自动记录）
+        # 执行版本检查（直接调用服务层，不使用 CLI 装饰器）
         logger.info("[Step 1/3] Running version check...")
-        check()
+        CheckService.run()
         logger.info("[Step 1/3] ✓ Version check completed")
 
         # 获取有更新的包
@@ -134,12 +141,12 @@ def daily_check_and_pr() -> None:
             logger.info(f"  [{success_count + 1}/{len(updated_results)}] {package_name}")
 
             try:
-                # 生成 manifests（内部会自动记录）
+                # 生成 manifests（直接调用服务层，不使用 CLI 装饰器）
                 logger.info(f"    → Generating manifests...")
-                manifests(package_name, [new_version], down_grade=False)
+                ManifestService.generate(package_name, [new_version], down_grade=False)
                 logger.info(f"    ✓ Manifests generated")
 
-                # 创建 PR（内部会自动记录，支持嵌套调用）
+                # 创建 PR（直接调用服务层，不使用 CLI 装饰器）
                 logger.info(f"    → Creating PR...")
                 from argparse import Namespace
                 args = Namespace(
@@ -150,7 +157,7 @@ def daily_check_and_pr() -> None:
                     repo_name=None,
                     base_branch=None
                 )
-                pr(args)
+                PRService.create(args)
                 logger.info(f"    ✓ PR created")
 
                 success_count += 1
@@ -162,9 +169,14 @@ def daily_check_and_pr() -> None:
                 # 统计失败数量
                 failed_packages.append(package_name)
 
+        # 计算最终状态
+        final_status = "completed"
+        if failed_packages:
+            final_status = "partial_success" if success_count > 0 else "failed"
+
         # 完成顶层扫描
         recorder.finish_scan(
-            status="completed" if not failed_packages else "partial_success",
+            status=final_status,
             total_packages=len(updated_results),
             updated_packages=len(updated_results),
             success_packages=success_count,
@@ -176,6 +188,35 @@ def daily_check_and_pr() -> None:
         if failed_packages:
             logger.warning(f"Failed packages: {', '.join(failed_packages)}")
         logger.info("=" * 70)
+
+        # 发送 Telegram 通知
+        try:
+            from .telegramBot_service import notify_scan_summary
+
+            # 准备更新列表
+            updated_list = []
+            for result in updated_results:
+                updated_list.append({
+                    "name": result['name'],
+                    "old_version": result.get('old_version', '?'),
+                    "new_version": result.get('version', '?')
+                })
+
+            failed_list = []
+            for pkg in failed_packages:
+                failed_list.append({"name": pkg})
+
+            # 异步发送通知
+            asyncio.run(notify_scan_summary(
+                total_packages=len(updated_results),
+                updated_packages=len(updated_results),
+                success_packages=success_count,
+                failed_packages=len(failed_packages),
+                updated_list=updated_list,
+                failed_list=failed_list
+            ))
+        except Exception as e:
+            logger.error(f"[Telegram] 通知发送失败: {e}")
 
     except Exception as e:
         logger.error(f"Task failed: {e}")
@@ -195,7 +236,7 @@ def daily_check_and_pr() -> None:
             total_packages=0,
             updated_packages=0,
             success_packages=0,
-            failed_packages=1
+            failed_packages=0
         )
         raise
 

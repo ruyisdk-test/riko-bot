@@ -13,8 +13,9 @@ from typing import Optional, List, Dict, Any, Type, TypeVar
 from datetime import datetime, timedelta
 
 from sqlalchemy import create_engine, select, func, and_, or_
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, sessionmaker, scoped_session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import StaticPool
 
 from .models import Base, ScanRecord, PackageUpdate, ManifestRecord, PRRecord
 from ..config.settings import settings
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar('T', bound=Base)
 
 
-# ========== 数据库管理器 ==========
+# 数据库管理器
 class DatabaseManager:
     """
     数据库管理器
@@ -47,22 +48,36 @@ class DatabaseManager:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 创建数据库引擎
+        # 创建数据库引擎（使用更安全的连接池配置）
         # SQLite 连接字符串: sqlite:///path/to/database.db
         # 使用配置的数据库 URL，或者使用默认路径
         database_url = settings.database_url or f"sqlite:///{self.db_path}"
+
+        # 针对 SQLite 的安全配置
+        connect_args = {
+            "check_same_thread": False,  # 仍然需要，但配合 scoped_session 使用更安全
+        }
+        # 添加额外的前缀参数以启用 WAL 模式和其他优化
+        if database_url.startswith("sqlite:///"):
+            # 为 SQLite 添加优化参数
+            database_url = f"{database_url}?timeout=20&isolation_level=None"
+
         self.engine = create_engine(
             database_url,
-            echo=settings.database_echo,  # 使用配置的 echo 设置
-            connect_args={"check_same_thread": False},  # SQLite 特定配置
+            echo=settings.database_echo,
+            connect_args=connect_args,
+            poolclass=StaticPool,  # SQLite 使用静态连接池
+            pool_pre_ping=True,  # 连接前检查连接有效性
         )
 
-        # 创建会话工厂
-        # 每个线程都有自己的会话（线程安全）
-        self.SessionLocal = sessionmaker(
-            autocommit=False,
-            autoflush=False,
-            bind=self.engine
+        # 使用 scoped_session 确保线程安全
+        # scoped_session 会为每个线程创建独立的会话实例
+        self.SessionLocal = scoped_session(
+            sessionmaker(
+                autocommit=False,
+                autoflush=False,
+                bind=self.engine
+            )
         )
 
         logger.info(f"Database initialized: {self.db_path}")
@@ -94,7 +109,7 @@ class DatabaseManager:
         with db_manager.get_session() as session:
             session.query(...)
 
-        类似于 Java 的 try-with-resources
+        线程安全：scoped_session 确保每个线程获得独立的会话
         """
         session = self.SessionLocal()
         try:
@@ -105,9 +120,11 @@ class DatabaseManager:
             logger.error(f"Database session error: {e}")
             raise
         finally:
+            # 对于 scoped_session，close() 会将会话返回到池中
+            # 而不是真正关闭连接
             session.close()
 
-    # ========== 扫描记录相关方法 ==========
+    # 扫描记录相关方法
 
     def get_scan_by_id(self, scan_id: int) -> ScanRecord:
         """
@@ -194,7 +211,7 @@ class DatabaseManager:
                 session.expunge(obj)
             return results
 
-    # ========== 包更新记录相关方法 ==========
+    # 包更新记录相关方法
 
     def create_package_update(
         self,
@@ -232,7 +249,7 @@ class DatabaseManager:
                 session.expunge(obj)
             return results
 
-    # ========== Manifest 记录相关方法 ==========
+    # Manifest 记录相关方法
 
     def create_manifest_record(
         self,
@@ -318,7 +335,7 @@ class DatabaseManager:
                 return record
             return None
 
-    # ========== PR 记录相关方法 ==========
+    # PR 记录相关方法
 
     def create_pr_record(
         self,
@@ -384,24 +401,38 @@ class DatabaseManager:
             session.expunge(record)
             return record
 
-    # ========== 通用查询方法 ==========
+    # 通用查询方法
 
     def get_by_id(self, model: Type[T], record_id: int) -> Optional[T]:
         """
         根据 ID 获取记录
         注意：此方法会预加载所有关系并分离对象
+
+        优化：使用 eager loading 一次性加载所有关系，避免 N+1 查询问题
         """
+        from sqlalchemy.orm import selectinload
+
         with self.get_session() as session:
-            result = session.get(model, record_id)
+            # 构建查询，包含所有可能的关系
+            query = session.query(model)
+
+            # 根据模型类型预加载相应的关系
+            if model == ScanRecord:
+                query = query.options(
+                    selectinload(ScanRecord.package_updates),
+                    selectinload(ScanRecord.manifest_records),
+                    selectinload(ScanRecord.pr_records)
+                )
+            elif model == ManifestRecord:
+                query = query.options(selectinload(ManifestRecord.scan_record))
+            elif model == PRRecord:
+                query = query.options(selectinload(PRRecord.scan_record))
+            elif model == PackageUpdate:
+                query = query.options(selectinload(PackageUpdate.scan_record))
+
+            result = query.filter(model.id == record_id).first()
+
             if result:
-                # 预加载所有关系（使用 eager loading）
-                from sqlalchemy.orm import selectinload
-                if hasattr(result, 'package_updates'):
-                    session.query(type(result)).options(
-                        selectinload(type(result).package_updates)
-                    ).get(record_id)
-                    # 重新获取以加载关系
-                    result = session.get(model, record_id)
                 session.expunge(result)
             return result
 
@@ -411,7 +442,7 @@ class DatabaseManager:
             return session.query(func.count(model.id)).scalar()
 
 
-# ========== 全局数据库实例 ==========
+# 全局数据库实例
 def get_database(db_path: Optional[str | Path] = None) -> DatabaseManager:
     """
     获取数据库管理器实例

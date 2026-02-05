@@ -18,7 +18,7 @@ from .models import ScanRecord, PackageUpdate, ManifestRecord, PRRecord
 
 logger = logging.getLogger(__name__)
 
-# ========== 触发源上下文 ==========
+# 触发源上下文
 # 使用 ContextVar 来存储当前请求的触发源（线程安全）
 _trigger_source_context: ContextVar[str] = ContextVar('trigger_source', default='cli')
 
@@ -33,7 +33,7 @@ def get_trigger_source() -> str:
     return _trigger_source_context.get()
 
 
-# ========== 统一记录器 ==========
+# 统一记录器
 class CommandRecorder:
     """
     命令执行记录器
@@ -52,7 +52,7 @@ class CommandRecorder:
         self._scan_depth: int = 0  # scan 嵌套深度
         self._scan_finished: bool = False  # 标记 scan 是否已完成
 
-    # ========== 扫描记录 ==========
+    # 扫描记录
     def start_scan(
         self,
         command: str,
@@ -70,7 +70,6 @@ class CommandRecorder:
         - 如果没有，创建新的 scan
         """
         self._scan_depth += 1
-        self._scan_finished = False  # 重置完成标志
 
         if self.current_scan_id is not None:
             # 已有活动的 scan，复用它（避免重复记录）
@@ -78,13 +77,19 @@ class CommandRecorder:
             return self.db.get_scan_by_id(self.current_scan_id)
 
         # 没有活动的 scan，创建新的
+        # 根据 trigger_source 确定 scan_type
+        scan_type = "scheduled" if trigger_source == "scheduler" else "manual"
+
+        # 只在创建新 scan 时重置完成标志
+        self._scan_finished = False
+
         scan = self.db.create_scan_record(
-            scan_type="manual",
+            scan_type=scan_type,
             trigger_source=trigger_source,
             status="running"
         )
         self.current_scan_id = scan.id
-        logger.info(f"[DB] Started scan {scan.id} for command: {command} (depth: {self._scan_depth})")
+        logger.info(f"[DB] Started scan {scan.id} (type={scan_type}) for command: {command} (depth: {self._scan_depth})")
         return scan
 
     def finish_scan(
@@ -141,7 +146,7 @@ class CommandRecorder:
         self.current_scan_id = None  # 清除 scan ID
         return scan
 
-    # ========== 版本检查记录 ==========
+    # 版本检查记录
     def record_version_check(
         self,
         package_name: str,
@@ -179,7 +184,7 @@ class CommandRecorder:
         logger.info(f"[DB] Recorded version check: {package_name} {old_version} → {new_version}")
         return pkg_update
 
-    # ========== Manifest 生成记录 ==========
+    # Manifest 生成记录
     def record_manifest_generation(
         self,
         package_name: str,
@@ -238,7 +243,7 @@ class CommandRecorder:
         logger.info(f"[DB] Recorded manifest generation: {package_name}/{combo_name} - {status}")
         return manifest
 
-    # ========== PR 创建记录 ==========
+    # PR 创建记录
     def record_pr_creation(
         self,
         package_name: str,
@@ -303,7 +308,7 @@ class CommandRecorder:
 
         return pr
 
-    # ========== 通用失败记录方法 ==========
+    # 通用失败记录方法
     def record_error(
         self,
         package_name: str,
@@ -366,7 +371,7 @@ class CommandRecorder:
         return manifest
 
 
-# ========== 全局记录器实例 ==========
+# 全局记录器实例
 _global_recorder: Optional[CommandRecorder] = None
 
 
@@ -378,7 +383,7 @@ def get_recorder() -> CommandRecorder:
     return _global_recorder
 
 
-# ========== 装饰器：自动记录命令执行 ==========
+# 装饰器：自动记录命令执行
 def record_command(command_name: str):
     """
     装饰器：自动记录命令执行
@@ -388,6 +393,11 @@ def record_command(command_name: str):
     def check():
         # ... 命令逻辑 ...
         pass
+
+    装饰器功能：
+    自动调用 start_scan() 开始扫描
+    捕获异常并调用 finish_scan(status="failed")
+    不记录具体的错误信息（由服务层自己记录）
     """
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
@@ -408,17 +418,6 @@ def record_command(command_name: str):
 
             except Exception as e:
                 logger.error(f"[DB] Command {command_name} failed: {e}")
-
-                # 记录失败（捕获可能的异常）
-                try:
-                    recorder.record_error(
-                        package_name="command",
-                        error=e,
-                        failure_step=command_name,
-                        include_traceback=True
-                    )
-                except Exception as db_err:
-                    logger.error(f"[DB] Failed to record error: {db_err}")
 
                 # 完成记录（失败状态，捕获可能的异常）
                 try:

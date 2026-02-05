@@ -3,7 +3,7 @@ import re
 
 from typing import List
 
-from riko.api import RikoPkg, GithubUpstream
+from riko.core.models import RikoPkg, GithubUpstream
 
 
 def rikoring(old_pkgs: List[RikoPkg], new_pkgs: List[RikoPkg]) -> None:

@@ -1,6 +1,6 @@
 from typing import List, Dict, Tuple
 
-from riko.api import RikoPkg, RegexUpstream
+from riko.core.models import RikoPkg, RegexUpstream
 
 
 def rikoring(old_pkgs: List[RikoPkg], new_pkgs: List[RikoPkg]) -> None:

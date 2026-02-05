@@ -66,7 +66,7 @@ class ScanRecord(Base):
         return f"<ScanRecord(id={self.id}, scan_time={self.scan_time}, status={self.status})>"
 
 
-# ========== 2. 包更新记录表 ==========
+# 包更新记录表
 class PackageUpdate(Base):
     """
     包更新记录表 - 保持不变

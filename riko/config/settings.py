@@ -5,6 +5,7 @@
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
+import logging
 # TOML 解析库（兼容 Python 3.11- 和 3.11+）
 try:
     import tomllib  # Python 3.11+ 内置
@@ -66,6 +67,7 @@ class Settings:
 
     # Telegram 配置
     telegram_token: str = ""
+    telegram_chat_id: str = ""
     @classmethod
     def load(cls) -> 'Settings':
         """加载配置，按优先级合并"""
@@ -115,9 +117,6 @@ class Settings:
                     result["app_debug"] = app["debug"]
                 if "environment" in app:
                     result["app_environment"] = app["environment"]
-                # 兼容旧拼写 enviroment
-                elif "enviroment" in app:
-                    result["app_environment"] = app["enviroment"]
 
             # [path] 节
             if "path" in config:
@@ -208,6 +207,8 @@ class Settings:
                 telegram = config["telegram"]
                 if "token" in telegram:
                     result["telegram_token"] = telegram["token"]
+                if "chat_id" in telegram:
+                    result["telegram_chat_id"] = str(telegram["chat_id"])
 
             return result
         except Exception as e:
@@ -263,12 +264,43 @@ class Settings:
 
             # Telegram 配置
             "telegram_token": os.getenv("TELEGRAM_TOKEN", ""),
+            "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
         }
 
     def validate(self):
         """配置验证"""
         if self.app_environment == "production" and not self.github_token:
             raise ValueError("生产环境必须配置 GITHUB_TOKEN")
+
+        # 验证 GitHub token 格式（GitHub token 通常以特定前缀开头）
+        if self.github_token:
+            # 基本格式验证：GitHub token 应该至少 40 字符
+            if len(self.github_token) < 20:
+                raise ValueError("GitHub token 格式无效：token 长度过短")
+
+            # 记录时屏蔽 token（仅用于调试）
+
+            logger = logging.getLogger(__name__)
+            masked_token = f"{self.github_token[:8]}...{self.github_token[-4:]}" if len(self.github_token) > 12 else "***"
+            logger.debug(f"GitHub token configured: {masked_token}")
+
+    def __str__(self):
+        """安全的字符串表示，屏蔽敏感信息"""
+        result = []
+        for key, value in self.__dict__.items():
+            if 'token' in key.lower() or 'password' in key.lower():
+                if value and len(str(value)) > 12:
+                    masked_value = f"{str(value)[:8]}...{str(value)[-4:]}"
+                else:
+                    masked_value = "***"
+                result.append(f"{key}={masked_value}")
+            else:
+                result.append(f"{key}={value}")
+        return ", ".join(result)
+
+    def __repr__(self):
+        """安全的表示形式，屏蔽敏感信息"""
+        return self.__str__()
 
     def _expand_paths(self):
         """展开路径中的~和相对路径"""
