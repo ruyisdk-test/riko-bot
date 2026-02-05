@@ -350,7 +350,7 @@ Riko includes an optional FastAPI server for REST API access.
 
 ```bash
 # Using Python module
-python3 -m uvicorn riko.interfaces.api.app:app --reload --host 0.0.0.0 --port 7777
+python3 -m uvicorn riko.interfaces.api.app:app --reload --host 127.0.0.0 --port 7777
 ```
 
 The API will be available at `http://localhost:7777`
