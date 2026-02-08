@@ -189,6 +189,7 @@ class ManifestService:
 
             def _uncompress(_orig: str) -> str:
                 _tars = [".tar.gz", ".tar.bz2", ".tar.lz4", ".tar.xz", ".tar.zst", ".gz", ".bz2", ".lz4", ".xz", ".zst", ".zip"]
+                # TODO: get uncompressed file name by `tar --list`
                 for t in _tars:
                     if _orig.endswith(t):
                         return _orig[:-len(t)]
