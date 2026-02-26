@@ -3,7 +3,6 @@
 """
 提供数据库初始化、会话管理和常用查询方法
 
-类似于 Java 的 Spring Data JPA Repository 模式
 """
 
 import logging
@@ -31,25 +30,19 @@ class DatabaseManager:
     """
     数据库管理器
 
-    职责：
     1. 数据库初始化和连接管理
     2. 提供会话管理（上下文管理器）
     3. 提供常用的数据库操作方法
-
-    使用方式类似于 Java 的 EntityManager 或 DbContext
     """
 
     def __init__(self, db_path: str | Path):
         """
         初始化数据库管理器
-
-        :param db_path: 数据库文件路径（SQLite）
         """
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 创建数据库引擎（使用更安全的连接池配置）
-        # SQLite 连接字符串: sqlite:///path/to/database.db
+        # 创建数据库引擎
         # 使用配置的数据库 URL，或者使用默认路径
         database_url = settings.database_url or f"sqlite:///{self.db_path}"
 
@@ -92,7 +85,7 @@ class DatabaseManager:
             raise
 
     def drop_tables(self) -> None:
-        """删除所有表（谨慎使用！）"""
+        """删除所有表"""
         try:
             Base.metadata.drop_all(bind=self.engine)
             logger.warning("All database tables dropped")
@@ -104,10 +97,6 @@ class DatabaseManager:
     def get_session(self):
         """
         获取数据库会话（上下文管理器）
-
-        使用方式：
-        with db_manager.get_session() as session:
-            session.query(...)
 
         线程安全：scoped_session 确保每个线程获得独立的会话
         """
@@ -129,9 +118,6 @@ class DatabaseManager:
     def get_scan_by_id(self, scan_id: int) -> ScanRecord:
         """
         根据 ID 获取扫描记录
-
-        :param scan_id: 扫描记录 ID
-        :return: ScanRecord 对象
         """
         with self.get_session() as session:
             record = session.query(ScanRecord).filter(ScanRecord.id == scan_id).first()
@@ -147,11 +133,6 @@ class DatabaseManager:
     ) -> ScanRecord:
         """
         创建新的扫描记录
-
-        :param scan_type: 扫描类型 ('manual' / 'scheduled')
-        :param trigger_source: 触发源 ('scheduler' / 'cli' / 'api')
-        :param status: 初始状态
-        :return: 创建的 ScanRecord 对象
         """
         with self.get_session() as session:
             record = ScanRecord(
@@ -173,10 +154,6 @@ class DatabaseManager:
     ) -> Optional[ScanRecord]:
         """
         更新扫描记录
-
-        :param scan_id: 扫描记录 ID
-        :param kwargs: 要更新的字段
-        :return: 更新后的 ScanRecord 对象
         """
         with self.get_session() as session:
             record = session.get(ScanRecord, scan_id)
@@ -196,10 +173,6 @@ class DatabaseManager:
     ) -> List[ScanRecord]:
         """
         获取最近的扫描记录
-
-        :param limit: 返回数量限制
-        :param status: 过滤状态（可选）
-        :return: ScanRecord 列表
         """
         with self.get_session() as session:
             query = session.query(ScanRecord)
@@ -271,22 +244,7 @@ class DatabaseManager:
         skip_reason: Optional[str] = None
     ) -> ManifestRecord:
         """
-        创建 Manifest 生成记录（简化版 v2）
-
-        :param scan_id: 扫描记录 ID
-        :param package_name: 包名
-        :param combo_name: Combo 名称
-        :param version: 版本
-        :param status: 生成状态 - 'success' / 'failed' / 'skipped'
-        :param manifest_path: Manifest 文件路径（成功时）
-        :param manifest_size: 文件大小（成功时）
-        :param manifest_hash: 文件哈希（成功时）
-        :param error_type: 错误类型（失败时）
-        :param error_message: 错误消息（失败时）
-        :param error_code: HTTP 状态码等（失败时）
-        :param error_details: 错误详情 JSON（失败时）
-        :param skip_reason: 跳过原因（跳过时）
-        :return: 创建的 ManifestRecord 对象
+        创建 Manifest 生成记录
         """
         with self.get_session() as session:
             record = ManifestRecord(
@@ -319,10 +277,6 @@ class DatabaseManager:
     ) -> Optional[ManifestRecord]:
         """
         更新 Manifest 记录
-
-        :param manifest_id: Manifest 记录 ID
-        :param kwargs: 要更新的字段（status, manifest_path, error_type 等）
-        :return: 更新后的 ManifestRecord 对象
         """
         with self.get_session() as session:
             record = session.get(ManifestRecord, manifest_id)
@@ -358,23 +312,7 @@ class DatabaseManager:
         skip_reason: Optional[str] = None
     ) -> PRRecord:
         """
-        创建 PR 记录（简化版 v2）
-
-        :param scan_id: 扫描记录 ID
-        :param package_name: 包名
-        :param version: 版本
-        :param status: 创建状态 - 'success' / 'failed' / 'skipped'
-        :param manifest_id: manifest 记录 ID（可选）
-        :param pr_number: PR 编号（成功时）
-        :param pr_url: PR URL（成功时）
-        :param branch_name: 功能分支名（成功时）
-        :param repo_owner: 仓库所有者（成功时）
-        :param repo_name: 仓库名称（成功时）
-        :param error_type: 错误类型（失败时）
-        :param error_message: 错误消息（失败时）
-        :param error_details: 错误详情 JSON（失败时）
-        :param skip_reason: 跳过原因（跳过时）
-        :return: 创建的 PRRecord 对象
+        创建 PR 记录
         """
         with self.get_session() as session:
             record = PRRecord(
@@ -406,9 +344,6 @@ class DatabaseManager:
     def get_by_id(self, model: Type[T], record_id: int) -> Optional[T]:
         """
         根据 ID 获取记录
-        注意：此方法会预加载所有关系并分离对象
-
-        优化：使用 eager loading 一次性加载所有关系，避免 N+1 查询问题
         """
         from sqlalchemy.orm import selectinload
 
@@ -446,9 +381,6 @@ class DatabaseManager:
 def get_database(db_path: Optional[str | Path] = None) -> DatabaseManager:
     """
     获取数据库管理器实例
-
-    :param db_path: 数据库路径（可选，默认使用配置中的路径）
-    :return: DatabaseManager 实例
     """
     from ..config.const import basedir
 

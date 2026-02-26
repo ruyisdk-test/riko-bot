@@ -3,10 +3,6 @@
 """
 数据库模块，用于记录扫描历史
 
-导出内容：
-- models: 数据库模型（简化版 v2）
-- db_manager: 数据库管理器
-- get_database: 获取数据库实例的便捷函数
 """
 
 from .models import (

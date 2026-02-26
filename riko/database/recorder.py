@@ -39,10 +39,6 @@ class CommandRecorder:
     命令执行记录器
 
     为所有 CLI 命令提供统一的数据库记录接口
-
-    特性：
-    - 支持嵌套调用（scheduler 调用 check/manifests 时不会重复记录）
-    - 自动检测和复用现有的 scan
     """
 
     def __init__(self):
@@ -59,15 +55,7 @@ class CommandRecorder:
         trigger_source: str = "cli"
     ) -> ScanRecord:
         """
-        开始扫描记录（支持嵌套）
-
-        :param command: 命令名称 (check/manifests/pr/scheduler)
-        :param trigger_source: 触发源 (cli/api/scheduler)
-        :return: ScanRecord 对象
-
-        嵌套调用处理：
-        - 如果已有活动的 scan，增加深度计数，返回现有 scan
-        - 如果没有，创建新的 scan
+        开始扫描记录
         """
         self._scan_depth += 1
 
@@ -101,19 +89,7 @@ class CommandRecorder:
         failed_packages: int = 0
     ) -> Optional[ScanRecord]:
         """
-        完成扫描记录（支持嵌套）
-
-        :param status: 最终状态
-        :param total_packages: 总包数
-        :param updated_packages: 有更新的包数
-        :param success_packages: 成功处理的包数
-        :param failed_packages: 失败的包数
-        :return: 更新后的 ScanRecord（如果是嵌�调用，返回 None）
-
-        嵌套调用处理：
-        - 只有在顶层 scan（depth=1）时才真正完成并关闭 scan
-        - 嵌套调用只减少深度计数
-        - 如果已经完成过，跳过（避免重复完成）
+        完成扫描记录
         """
         self._scan_depth -= 1
 
@@ -158,14 +134,6 @@ class CommandRecorder:
     ) -> PackageUpdate:
         """
         记录版本检查结果
-
-        :param package_name: 包名
-        :param new_version: 新版本
-        :param old_version: 旧版本
-        :param check_status: 检查状态
-        :param nvchecker_event: nvchecker 事件类型
-        :param nvchecker_url: 版本发布 URL
-        :return: PackageUpdate 对象
         """
         if not self.current_scan_id:
             # 如果没有活动扫描，自动创建一个
@@ -204,21 +172,7 @@ class CommandRecorder:
         skip_reason: Optional[str] = None
     ) -> ManifestRecord:
         """
-        记录 Manifest 生成结果（简化版 v2）
-
-        :param package_name: 包名
-        :param combo_name: combo 名称
-        :param version: 版本
-        :param status: 生成状态 - 'success' / 'failed' / 'skipped'
-        :param manifest_path: manifest 文件路径（成功时）
-        :param manifest_size: 文件大小（成功时）
-        :param manifest_hash: 文件哈希（成功时）
-        :param error_type: 错误类型（失败时）
-        :param error_message: 错误消息（失败时）
-        :param error_code: HTTP 状态码等（失败时）
-        :param error_details: 错误详情 JSON（失败时）
-        :param skip_reason: 跳过原因（跳过时）
-        :return: ManifestRecord 对象
+        记录 Manifest 生成结果
         """
         if not self.current_scan_id:
             # 如果没有活动扫描，自动创建一个
@@ -265,21 +219,6 @@ class CommandRecorder:
     ) -> PRRecord:
         """
         记录 PR 创建结果
-
-        :param package_name: 包名
-        :param version: 版本
-        :param status: 创建状态 - 'success' / 'failed' / 'skipped'
-        :param manifest_id: manifest 记录 ID
-        :param pr_number: PR 编号（成功时）
-        :param pr_url: PR URL（成功时）
-        :param branch_name: 分支名称（成功时）
-        :param repo_owner: 仓库所有者（成功时）
-        :param repo_name: 仓库名称（成功时）
-        :param error_type: 错误类型（失败时）
-        :param error_message: 错误消息（失败时）
-        :param error_details: 错误详情 JSON（失败时）
-        :param skip_reason: 跳过原因（跳过时）
-        :return: PRRecord 对象
         """
         if not self.current_scan_id:
             # 如果没有活动扫描，自动创建一个
@@ -319,13 +258,6 @@ class CommandRecorder:
     ) -> ManifestRecord:
         """
         记录错误到 manifest_records 表
-
-        :param package_name: 包名
-        :param error: 异常对象
-        :param failure_step: 具体失败步骤
-        :param version: 版本
-        :param include_traceback: 是否包含堆栈跟踪
-        :return: ManifestRecord 对象
         """
         if not self.current_scan_id:
             # 如果没有活动扫描，自动创建一个
@@ -383,21 +315,9 @@ def get_recorder() -> CommandRecorder:
     return _global_recorder
 
 
-# 装饰器：自动记录命令执行
 def record_command(command_name: str):
     """
     装饰器：自动记录命令执行
-
-    使用方式：
-    @record_command("check")
-    def check():
-        # ... 命令逻辑 ...
-        pass
-
-    装饰器功能：
-    自动调用 start_scan() 开始扫描
-    捕获异常并调用 finish_scan(status="failed")
-    不记录具体的错误信息（由服务层自己记录）
     """
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
