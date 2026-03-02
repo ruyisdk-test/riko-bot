@@ -27,7 +27,7 @@ def api_create_pr(
     """
     为指定包创建 PR
 
-    HTTP 方法：POST（创建操作，有副作用）
+    HTTP 方法：POST
     路径参数：package_name - 包名称
     请求体（可选）：
         {

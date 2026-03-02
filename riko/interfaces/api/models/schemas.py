@@ -56,3 +56,27 @@ class SchedulerStartRequest(BaseModel):
     # 注：当前 scheduler.py 硬编码为每天凌晨2点，此参数暂未生效
     hour: int = 2
     minute: int = 0
+
+# versions-sync Endpoints Models
+class VersionSyncRequest(BaseModel):
+    """版本同步请求"""
+    dry_run: bool = False  # 预览模式，不执行实际修改
+    package: Optional[str] = None  # 指定单个包
+    verbose: bool = False  # 详细输出模式
+    github_token: Optional[str] = None  # GitHub Token
+    repo_owner: Optional[str] = None  # 仓库所有者
+    repo_name: Optional[str] = None  # 仓库名称
+    base_branch: Optional[str] = None  # 基础分支
+    branch_prefix: Optional[str] = None  # 分支前缀
+
+
+class VersionSyncResponse(BaseModel):
+    """版本同步响应"""
+    status: str  # success / failed / dry_run
+    packages_scanned: int  # 扫描的包数量
+    combos_with_changes: int  # 有变更的 combo 数量
+    versions_to_add: int  # 要添加的版本数
+    versions_to_delete: int  # 要删除的版本数
+    scan_id: Optional[int] = None  # 扫描记录 ID
+    error_type: Optional[str] = None
+    error_message: Optional[str] = None

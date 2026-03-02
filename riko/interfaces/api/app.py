@@ -9,7 +9,7 @@
 import logging
 
 from fastapi import FastAPI
-from .routes import check_routes, manifest_routes, pr_routes, scheduler_routes
+from .routes import check_routes, manifest_routes, pr_routes, scheduler_routes, versions_sync_routes
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ app.include_router(check_routes.router)
 app.include_router(manifest_routes.router)
 app.include_router(pr_routes.router)
 app.include_router(scheduler_routes.router)
-
+app.include_router(versions_sync_routes.router)
 
 # 根路径
 @app.get("/")
@@ -51,6 +51,9 @@ def api_root():
                 "POST /scheduler/stop": "停止定时调度器",
                 "GET /scheduler/status": "获取调度器状态",
                 "POST /scheduler/trigger": "手动触发每日检查和 PR 任务"
+            },
+            "versions-sync": {
+                "POST /version-sync": "执行版本同步（对比上游版本并创建 PR）"
             }
         }
     }

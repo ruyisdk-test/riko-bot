@@ -2,16 +2,6 @@
 Riko API - 核心数据模型定义
 
 本模块定义了 Ruko 项目的核心数据模型，用于表示和管理包的完整信息。
-
-主要导出：
-- RikoPkg: 包的完整数据模型，包含分类、版本、上游源、清单等信息
-- GithubUpstream: GitHub Release 上游源
-- RegexUpstream: 正则表达式上游源
-
-使用场景：
-- manifests 命令：生成清单时创建和操作 RikoPkg 对象
-- 自定义钩子（riko.py）：接收 RikoPkg 列表进行自定义处理
-- 包管理：在整个流程中传递包信息
 """
 
 import semver
@@ -35,33 +25,12 @@ class RikoPkg(PackageVersion):
 
     这是 Riko 项目的核心数据模型，继承自 PackageVersion，用于表示一个包的完整信息。
     包含包的分类、组合名、版本号、上游源和清单数据。
-
-    继承关系：
-        PackageVersion (基础模型)
-            ↓
-        RikoPkg (扩展模型)
-
-    属性：
-        _category: 包分类（如：board-image）
-        _combo: 包组合名（如：openwrt-sifive-unmatched）
-        _upstream_name: 上游包名（如：openwrt-sifiveu）
-        _upstream: 上游源对象（GithubUpstream 或 RegexUpstream）
-        _manifest_ready: 清单是否准备就绪（用于控制是否写入文件）
     """
 
     def __init__(self, category: str, combo: str, up_name: str,
                  version: semver.Version, upstream_version: str,
                  upstream: _UpstreamLike = None) -> None:
-        """
-        初始化 RikoPkg 对象
-
-        :param category: 包分类（如：board-image）
-        :param combo: 包组合名（如：openwrt-sifive-unmatched）
-        :param up_name: 上游包名（如：openwrt-sifiveu）
-        :param version: 语义化版本对象
-        :param upstream_version: 上游版本字符串
-        :param upstream: 上游源对象（GithubUpstream 或 RegexUpstream），可选
-        """
+        # 初始化 RikoPkg 对象
         # 调用父类初始化，传递版本和空策略列表
         super().__init__(version, upstream_version, {})
 
@@ -78,12 +47,8 @@ class RikoPkg(PackageVersion):
 
     def set_manifest(self, manifest: Dict) -> None:
         """
-        设置清单数据
-
         调用父类方法设置清单的完整内容，包括 metadata、distfiles、
         provisionable 等所有字段。
-
-        :param manifest: 清单字典数据
         """
         super().set_manifest(manifest)
 
@@ -93,10 +58,6 @@ class RikoPkg(PackageVersion):
 
         清单就绪意味着清单已经完全生成并验证通过，可以写入文件。
         这通常在清单生成、推理规则、验证都成功完成后调用。
-
-        使用场景：
-            - manifests 命令中清单生成和验证成功后
-            - 验证通过后准备写入 TOML 文件时
         """
         self._manifest_ready = True
 

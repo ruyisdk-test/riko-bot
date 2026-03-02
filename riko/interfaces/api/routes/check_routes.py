@@ -22,9 +22,6 @@ router = APIRouter(prefix="/check", tags=["check"])
 def api_check_versions():
     """
     触发版本检查
-
-    HTTP 方法：GET（幂等操作）
-    返回：检查结果统计
     """
     logger.info("[API] Received check request")
 
@@ -85,10 +82,7 @@ def api_check_versions():
 @router.post("/run", response_model=CheckResponse)
 def api_run_check():
     """
-    执行版本检查（会记录到数据库）
-
-    HTTP 方法：POST（执行操作）
-    返回：检查结果统计
+    执行版本检查
     """
     logger.info("[API] Received check run request")
 

@@ -17,6 +17,7 @@ from riko.services.scheduler_service import (
     run_scheduler_daemon,
 )
 from riko.interfaces.cli.telegramBot import telegramBot
+from riko.interfaces.cli.version_sync import version_sync
 
 # 配置日志级别
 logging.basicConfig(level=logging.INFO)
@@ -76,6 +77,18 @@ def main():
 
     subparser = subparsers.add_parser("telegram-bot", help="启动 Telegram 机器人")
     subparser.set_defaults(func=lambda args: telegramBot())
+
+    # version-sync 子命令
+    subparser = subparsers.add_parser("version-sync", help="同步上游版本与 packages-index")
+    subparser.add_argument("--dry-run", action="store_true", help="仅显示变更，不执行 Git 操作")
+    subparser.add_argument("--package", type=str, metavar="PACKAGE_NAME", help="仅同步指定包（例如：freebsd）")
+    subparser.add_argument("-v", "--verbose", action="store_true", help="显示详细版本信息")
+    subparser.add_argument("--github-token", type=str, help="GitHub Personal Access Token（优先级：CLI > 配置文件）")
+    subparser.add_argument("--repo-owner", type=str, help="GitHub 仓库所有者（默认：SmulllLu）")
+    subparser.add_argument("--repo-name", type=str, help="GitHub 仓库名称（默认：packages-index）")
+    subparser.add_argument("--base-branch", type=str, help="PR 目标分支（默认：pr）")
+    subparser.add_argument("--branch-prefix", type=str, help="功能分支前缀（默认：manifest-update）")
+    subparser.set_defaults(func=lambda args: version_sync(args))
 
     if len(sys.argv) == 1:
         parser.print_help()
