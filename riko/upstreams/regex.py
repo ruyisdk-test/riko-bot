@@ -6,12 +6,11 @@
 - 从发布页面的 HTML 中提取下载链接
 - 通过正则表达式匹配文件名和 URL
 - 支持子字符串过滤和正则表达式过滤
-
-类似于 Java 的 Web 爬虫（如 Jsoup）
 """
 
 import http.client  # HTTP 客户端（低级别）
 import logging
+import os  # 操作系统接口（环境变量）
 import re  # 正则表达式
 import urllib.parse  # URL 解析
 import urllib.request  # URL 请求
@@ -21,6 +20,31 @@ from typing import ClassVar, List, Tuple  # 类型注解
 from .upstream import Upstream  # 上游源基类
 
 logger = logging.getLogger(__name__)
+
+
+def _get_proxy_handler():
+    """
+    获取代理处理器
+
+    通过检查 HTTP_PROXY 和 HTTPS_PROXY 环境变量来配置代理
+
+    :return: urllib.request.ProxyHandler 对象，如果没有配置代理则返回 None
+    """
+    # 检查环境变量中的代理设置
+    http_proxy = os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy')
+    https_proxy = os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy')
+
+    proxies = {}
+    if http_proxy:
+        proxies['http'] = http_proxy
+        logger.debug(f"Using HTTP proxy: {http_proxy}")
+    if https_proxy:
+        proxies['https'] = https_proxy
+        logger.debug(f"Using HTTPS proxy: {https_proxy}")
+
+    if proxies:
+        return urllib.request.ProxyHandler(proxies)
+    return None
 
 
 class RegexUpstream(Upstream):
@@ -46,7 +70,6 @@ class RegexUpstream(Upstream):
     ```
     """
 
-    # 类变量（类似于 Java 的 static final 字段）
     source: ClassVar[str] = "regex"  # 上游源类型标识
 
     def __init__(self, base_url: str, base_re: str, file_url: str, file_re: str) -> None:
@@ -58,9 +81,6 @@ class RegexUpstream(Upstream):
         :param file_url: 要获取的网页 URL
         :param file_re: 用于匹配文件名的正则表达式
 
-        Python 特殊语法：
-        - self: 实例引用（类似于 Java 的 this）
-        - _前缀: 约定私有字段（类似于 Java 的 private）
         """
         self._base_url = base_url          # 基础 URL（未使用）
         self._base_regex = base_re        # 基础正则（未使用）
@@ -78,14 +98,10 @@ class RegexUpstream(Upstream):
 
         :param f: 文件名（相对路径）
         :return: (文件名, 完整URL) 元组
-
-        Python 特殊语法：
-        - Tuple[str, str]: 元组类型注解（类似于 Java 的 Pair<String, String>）
-        - urllib.parse.urljoin(): 拼接 URL（类似于 Java's URL constructor）
         """
         return f, urllib.parse.urljoin(self._file_url, f)
 
-    # ========== 核心方法：获取发布文件列表 ==========
+    # 获取发布文件列表
     def get_release_asserts(self) -> List[str]:
         """
         从网页获取所有匹配的文件名
@@ -99,19 +115,19 @@ class RegexUpstream(Upstream):
 
         :return: 文件名列表
 
-        Python 特殊语法：
-        - urllib.request.urlopen(): 打开 URL（类似于 Java's HttpURLConnection）
-        - timeout=30.0: 设置超时（30秒）
-        - .decode(): 字节转字符串（使用 UTF-8 编码）
-        - re.findall(): 正则表达式匹配所有结果
         """
         # 如果已加载，直接返回缓存
         if self._ready:
             return self._asserts
 
+        # 配置代理
+        proxy_handler = _get_proxy_handler()
+        opener = urllib.request.build_opener(proxy_handler) if proxy_handler else urllib.request.build_opener()
+        urllib.request.install_opener(opener)
+
         # 发送 HTTP GET 请求
         # urllib.request.urlopen() 返回 HTTPResponse 对象
-        resp: http.client.HTTPResponse = urllib.request.urlopen(self._file_url, timeout=30.0)
+        resp: http.client.HTTPResponse = opener.open(self._file_url, timeout=30.0)
 
         # 检查 HTTP 状态码
         # http.client.OK = 200
@@ -132,7 +148,7 @@ class RegexUpstream(Upstream):
 
         return self._asserts
 
-    # ========== 过滤方法：子字符串匹配 ==========
+    # 过滤方法：子字符串匹配
     def get_release_asserts_substring(self, substr: str) -> List[Tuple[str, str]]:
         """
         使用子字符串过滤文件列表
@@ -143,8 +159,6 @@ class RegexUpstream(Upstream):
         使用场景：
         从多个文件中筛选出包含特定关键字（如板卡型号）的文件
 
-        Python 特殊语法：
-        - substr in f: 子字符串检查（类似于 Java's String.contains()）
         """
         r = []
 
@@ -174,7 +188,7 @@ class RegexUpstream(Upstream):
         assert len(r) == 1, f"Expected 1 result, got {len(r)}"
         return r[0]
 
-    # ========== 过滤方法：正则表达式匹配 ==========
+    # 过滤方法：正则表达式匹配
     def get_release_asserts_regex(self, pattern: str) -> List[Tuple[str, str]]:
         """
         使用正则表达式过滤文件列表
@@ -206,8 +220,6 @@ class RegexUpstream(Upstream):
         :return: (文件名, URL) 元组
         :raises AssertionError: 如果匹配结果不等于 1 个
 
-        Python 特殊语法：
-        - assert len(r) == 1: 确保只有一个结果
         """
         r = self.get_release_asserts_regex(pattern)
 

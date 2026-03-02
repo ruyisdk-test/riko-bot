@@ -19,4 +19,4 @@ config/config.toml
 
 .env
 
-/test
+/tests

@@ -68,6 +68,112 @@ class PRService:
     CORE_DIR = "board-image"
 
     @staticmethod
+    def _create_github_pr(
+        gh_token: str,
+        repo_owner: str,
+        repo_name: str,
+        base_branch: str,
+        feature_branch: str,
+        title: str,
+        body: str,
+        recorder,
+        package_name: str,
+        version: str
+    ) -> bool:
+        """
+        创建 GitHub PR（通用方法）
+
+        :param gh_token: GitHub Token
+        :param repo_owner: 仓库所有者
+        :param repo_name: 仓库名称
+        :param base_branch: 基础分支
+        :param feature_branch: 功能分支
+        :param title: PR 标题
+        :param body: PR 描述
+        :param recorder: 数据库记录器
+        :param package_name: 包名称
+        :param version: 版本号
+        :return: 创建成功返回 True
+        """
+        logger.info(f"Creating PR to {repo_owner}/{repo_name} (base: {base_branch})...")
+        try:
+            auth = Auth.Token(gh_token)
+            g = Github(auth=auth, timeout=30)
+        except (ImportError, AttributeError):
+            g = Github(gh_token, timeout=30)
+
+        try:
+            gh_repo = g.get_repo(f"{repo_owner}/{repo_name}")
+
+            # 检查 PR 是否已存在
+            existing_prs = gh_repo.get_pulls(
+                state="open",
+                head=f"{repo_owner}:{feature_branch}",
+                base=base_branch
+            )
+
+            if existing_prs.totalCount > 0:
+                logger.info(f"PR already exists: {repo_owner}/{repo_name}#{existing_prs[0].number}")
+
+                # 更新 nvchecker 版本记录（避免重复检测）
+                PRService._update_nvchecker_old_version(package_name, version)
+
+                # 记录已存在状态并返回
+                recorder.record_pr_creation(
+                    package_name=package_name,
+                    version=version,
+                    status="already_exists",
+                    pr_number=existing_prs[0].number,
+                    pr_url=existing_prs[0].html_url,
+                    branch_name=feature_branch,
+                    repo_owner=repo_owner,
+                    repo_name=repo_name
+                )
+                return True
+
+            # 创建新 PR
+            pr = gh_repo.create_pull(
+                title=title,
+                body=body,
+                head=feature_branch,
+                base=base_branch
+            )
+            logger.info(f"PR created successfully: {pr.html_url}")
+
+            # 更新 nvchecker 版本记录（避免重复检测）
+            PRService._update_nvchecker_old_version(package_name, version)
+
+            # 记录成功
+            recorder.record_pr_creation(
+                package_name=package_name,
+                version=version,
+                status="success",
+                pr_number=pr.number,
+                pr_url=pr.html_url,
+                branch_name=feature_branch,
+                repo_owner=repo_owner,
+                repo_name=repo_name
+            )
+            return True
+
+        except GithubException as e:
+            logger.error(f"GitHub API failed: {e}")
+            error_details = json.dumps({
+                "error_type": "GithubException",
+                "error_message": str(e),
+                "error_code": getattr(e, 'status', None)
+            })
+            recorder.record_pr_creation(
+                package_name=package_name,
+                version=version,
+                status="failed",
+                error_type="GithubException",
+                error_message=str(e),
+                error_details=error_details
+            )
+            raise
+
+    @staticmethod
     def _load_riko_config() -> Dict[str, Any]:
         """从统一配置系统加载 riko 配置"""
         return {
@@ -369,83 +475,18 @@ class PRService:
         logger.info(f"Pushed: {feature_branch} -> origin/{feature_branch}")
 
         # 创建 GitHub PR
-        logger.info(f"Creating PR to {repo_owner}/{repo_name} (base: {base_branch})...")
-        try:
-            auth = Auth.Token(gh_token)
-            g = Github(auth=auth, timeout=30)
-        except (ImportError, AttributeError):
-            g = Github(gh_token, timeout=30)
-
-        try:
-            gh_repo = g.get_repo(f"{repo_owner}/{repo_name}")
-
-            # 检查 PR 是否已存在
-            existing_prs = gh_repo.get_pulls(
-                state="open",
-                head=f"{repo_owner}:{feature_branch}",
-                base=base_branch
-            )
-
-            if existing_prs.totalCount > 0:
-                logger.info(f"PR already exists: {repo_owner}/{repo_name}#{existing_prs[0].number}")
-
-                # 更新 nvchecker 版本记录（避免重复检测）
-                PRService._update_nvchecker_old_version(package_name, version)
-
-                # 记录已存在状态并返回
-                recorder.record_pr_creation(
-                    package_name=package_name,
-                    version=version,
-                    status="already_exists",
-                    pr_number=existing_prs[0].number,
-                    pr_url=existing_prs[0].html_url,
-                    branch_name=feature_branch,
-                    repo_owner=repo_owner,
-                    repo_name=repo_name
-                )
-                return  # 正常返回
-
-            # 创建新 PR
-            pr = gh_repo.create_pull(
-                title=f"Update {package_name} to {version}",
-                body=f"""Automatically synced from ruyi-packaging
+        PRService._create_github_pr(
+            gh_token=gh_token,
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            base_branch=base_branch,
+            feature_branch=feature_branch,
+            title=f"Update {package_name} to {version}",
+            body=f"""Automatically synced from ruyi-packaging
 - Package: {package_name}
 - Version: {version}
 - Manifest Path: {target_manifests[0].relative_to(PRService.PACKAGES_INDEX_ROOT)}""",
-                head=feature_branch,
-                base=base_branch
-            )
-            logger.info(f"PR created successfully: {pr.html_url}")
-
-            # 更新 nvchecker 版本记录（避免重复检测）
-            PRService._update_nvchecker_old_version(package_name, version)
-
-            # 记录成功
-            recorder.record_pr_creation(
-                package_name=package_name,
-                version=version,
-                status="success",
-                pr_number=pr.number,
-                pr_url=pr.html_url,
-                branch_name=feature_branch,
-                repo_owner=repo_owner,
-                repo_name=repo_name
-            )
-        # 失败时记录异常信息
-        except GithubException as e:
-            logger.error(f"GitHub API failed: {e}")
-            # 记录失败并抛出异常（装饰器会捕获）
-            error_details = json.dumps({
-                "error_type": "GithubException",
-                "error_message": str(e),
-                "error_code": getattr(e, 'status', None)
-            })
-            recorder.record_pr_creation(
-                package_name=package_name,
-                version=version,
-                status="failed",
-                error_type="GithubException",
-                error_message=str(e),
-                error_details=error_details
-            )
-            raise  # 重新抛出异常，装饰器会记录并调用 finish_scan(status="failed")
+            recorder=recorder,
+            package_name=package_name,
+            version=version
+        )
