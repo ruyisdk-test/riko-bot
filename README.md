@@ -358,6 +358,45 @@ This command:
 1. It can allow upstream services to update and notify on Telegram at scheduled times
 2. Enters the bot into a polling loop to listen for messages
 
+#### `riko version-sync`
+
+Synchronize upstream versions with packages-index repository:
+
+```bash
+# Dry-run mode (preview changes without modifying anything)
+python3 -m riko version-sync --dry-run
+
+# Show detailed version information
+python3 -m riko version-sync --dry-run -v
+
+# Sync specific package only
+python3 -m riko version-sync --package freebsd
+
+# Execute actual sync (requires GitHub token)
+python3 -m riko version-sync
+```
+
+**Options:**
+- `--dry-run` - Preview mode, show changes without executing Git operations
+- `--package PACKAGE_NAME` - Sync only the specified package (e.g., freebsd)
+- `-v, --verbose` - Show detailed version information
+- `--github-token` - GitHub Personal Access Token (overrides config)
+- `--repo-owner` - Repository owner (default: SmulllLu)
+- `--repo-name` - Repository name (default: packages-index)
+- `--base-branch` - Target branch (default: pr)
+- `--branch-prefix` - Feature branch prefix (default: manifest-update)
+
+This command:
+1. Scans all board-image packages from `ruyi_packages/board-image/`
+2. Fetches available versions from upstream sources (regex, GitHub)
+3. Compares with existing versions in packages-index repository
+4. Generates manifest files for new versions
+5. Commits changes and pushes to remote repository
+
+**Important Notes:**
+- **Proxy Support**: If you're behind a firewall, configure `HTTP_PROXY` and `HTTPS_PROXY` in `.env` for accessing GitHub API.
+- **Dry-run First**: Always run with `--dry-run` first to preview changes before executing actual sync operations.
+
 ### FastAPI Server
 
 Riko includes an optional FastAPI server for REST API access.
