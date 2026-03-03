@@ -90,16 +90,17 @@ Riko follows a **three-tier architecture** pattern for clean separation of conce
 ```
 riko-packaging/
 ├── riko/
-│   ├── core/                      # 【核心层】业务逻辑和数据模型
-│   │   ├── riko.py               # 核心业务类
-│   │   └── models.py             # 数据模型
+│   ├── core/                       # 【核心层】业务逻辑和数据模型
+│   │   ├── riko.py                 # 核心业务类
+│   │   └── models.py               # 数据模型
 │   │
-│   ├── services/                  # 【服务层】业务服务编排
-│   │   ├── check_service.py       # 版本检查服务
-│   │   ├── manifest_service.py    # 清单生成服务
-│   │   ├── pr_service.py          # PR 创建服务
-│   │   └── scheduler_service.py   # 调度器服务
-│   │   └── telegramBot_service.py # Telegram 机器人服务
+│   ├── services/                   # 【服务层】业务服务编排
+│   │   ├── check_service.py        # 版本检查服务
+│   │   ├── manifest_service.py     # 清单生成服务
+│   │   ├── pr_service.py           # PR 创建服务
+│   │   ├── scheduler_service.py    # 调度器服务
+│   │   ├── telegramBot_service.py  # Telegram 机器人服务
+│   │   └── version_sync_service.py # 版本对比更改服务
 │   │
 │   ├── interfaces/                # 【接口层】外部接口
 │   │   ├── cli/                  # CLI 命令
@@ -107,7 +108,8 @@ riko-packaging/
 │   │   │   ├── list.py
 │   │   │   ├── manifests.py
 │   │   │   ├── pr.py
-│   │   │   └── utils.py
+│   │   │   ├── utils.py
+│   │   │   └── version_sync.py
 │   │   │
 │   │   └── api/                  # Web API
 │   │       ├── app.py            # FastAPI 应用
@@ -115,8 +117,9 @@ riko-packaging/
 │   │       │   ├── check_routes.py
 │   │       │   ├── manifest_routes.py
 │   │       │   ├── pr_routes.py
-│   │       │   └── scheduler_routes.py 
-│   │       │   └── telegramBot_routes.py 
+│   │       │   ├── scheduler_routes.py 
+│   │       │   ├── telegramBot_routes.py 
+│   │       │   └── versions_sync_routes.py
 │   │       └── models/
 │   │           └── schemas.py     # Pydantic 模型
 │   │
@@ -126,12 +129,11 @@ riko-packaging/
 │   ├── packages_index/            # 包索引模块
 │   ├── ruyi_packages/             # Ruyi 包模块
 │   ├── upstreams/                 # 上游源模块
+│   ├── utils/                     # 工具模块
 │   ├── __init__.py
 │   └── __main__.py               # CLI 入口
 │
 ├── config/                        # 配置文件模板
-├── docs/                          # 文档
-│   └── refactoring_report.md    # 重构报告
 ├── .env.example                   # 环境变量模板
 ├── pyproject.toml                # 项目配置
 └── README.md                     # 本文件
