@@ -11,4 +11,4 @@ def rikoring(old_pkgs: List[RikoPkg], new_pkgs: List[RikoPkg]) -> None:
     :return:
     """
     urls = new_pkgs[0].get_manifest()[0]["distfiles"][0]["urls"]
-    urls[0] = urls[0].replace("https://mirror.iscas.ac.cn/FreeBSD/releases", "mirror://freebsd-releases")
+    urls[0] = urls[0].replace("https://mirror.iscas.ac.cn/FreeBSD/releases", "https://download.freebsd.org")

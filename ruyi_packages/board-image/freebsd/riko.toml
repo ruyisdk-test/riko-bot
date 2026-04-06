@@ -1,6 +1,6 @@
 [nvchecker]
 source = "regex"
-url = "https://mirror.iscas.ac.cn/FreeBSD/releases/riscv/riscv64/ISO-IMAGES/"
+url = "https://download.freebsd.org/releases/riscv/riscv64/ISO-IMAGES/"
 regex = '<a href="([\d.]+)/" title="[\d.]+">[\d.]+/</a>'
 
 [source]
