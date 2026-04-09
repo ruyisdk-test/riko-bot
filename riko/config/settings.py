@@ -219,7 +219,7 @@ class Settings:
     def _merge(cls, base: 'Settings', updates: dict) -> 'Settings':
         """合并配置"""
         for key, value in updates.items():
-            if hasattr(base, key):
+            if hasattr(base, key) and value is not None:
                 setattr(base, key, value)
         return base
 
@@ -252,7 +252,7 @@ class Settings:
 
             # 仓库配置
             "packages_index_url": os.getenv("PACKAGES_INDEX_URL", ""),
-            "use_ruyi_iscas_mirror": os.getenv("USE_RUYI_ISCAS_MIRROR", "true").lower() == "true",
+            "use_ruyi_iscas_mirror": os.getenv("USE_RUYI_ISCAS_MIRROR", "").lower() == "true" if os.getenv("USE_RUYI_ISCAS_MIRROR") is not None else None,
 
             # 数据库配置
             "database_url": os.getenv("DATABASE_URL", ""),

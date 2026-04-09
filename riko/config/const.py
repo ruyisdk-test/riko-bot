@@ -35,5 +35,8 @@ mode = "local"
 
 ruyi_config_extra = '''
 [repo]
+remote = "https://github.com/ruyisdk/packages-index.git"
+''' if not settings.use_ruyi_iscas_mirror else '''
+[repo]
 remote = "https://mirror.iscas.ac.cn/git/ruyisdk/packages-index.git"
-''' if settings.use_ruyi_iscas_mirror else ""
+'''
