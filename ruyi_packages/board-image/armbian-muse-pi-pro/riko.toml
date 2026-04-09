@@ -1,0 +1,14 @@
+[nvchecker]
+source = "regex"
+url = "https://fi.mirror.armbian.de/cache/artifacts/musepipro/archive/"
+regex = "Armbian_([\\d.]+)_"
+
+[source]
+regex_file_url = "https://fi.mirror.armbian.de/cache/artifacts/musepipro/archive/"
+regex_file_regex = 'href="(Armbian[^"]+\\.img\\.xz)"'
+
+[entities]
+image-combo = [
+    "armbian-musepipro",
+]
+

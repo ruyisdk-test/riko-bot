@@ -1,0 +1,14 @@
+[nvchecker]
+source = "regex"
+url = "https://fi.mirror.armbian.de/cache/artifacts/orangepirv2/archive/"
+regex = "Armbian_([\\d.]+-trunk\\.\\d+)_"
+
+[source]
+regex_file_url = "https://fi.mirror.armbian.de/cache/artifacts/orangepirv2/archive/"
+regex_file_regex = 'href="(Armbian[^"]+\\.img\\.xz)"'
+
+[entities]
+image-combo = [
+    "armbian-orangepirv2",
+]
+
