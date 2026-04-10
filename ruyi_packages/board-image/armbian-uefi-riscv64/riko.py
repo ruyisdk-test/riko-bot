@@ -5,7 +5,7 @@ from riko.core.models import RikoPkg
 
 def rikoring(old_pkgs: List[RikoPkg], new_pkgs: List[RikoPkg]) -> None:
     """
-    Process Armbian StarFive VisionFive 2 board images
+    Process Armbian UEFI RISC-V64 board images
     """
     for i, new_pkg in enumerate(new_pkgs):
         new_toml: Dict = new_pkg.get_manifest()[0]

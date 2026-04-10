@@ -1,10 +1,10 @@
 [nvchecker]
 source = "github"
-github = "armbian/community"
+github = "armbian/os"
 use_latest_release = true
 
 [entities]
 image-combo = [
-    "armbian-visionfive2",
+    "armbian-musepipro",
 ]
 

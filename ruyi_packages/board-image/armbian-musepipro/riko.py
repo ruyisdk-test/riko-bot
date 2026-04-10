@@ -5,7 +5,7 @@ from riko.core.models import RikoPkg
 
 def rikoring(old_pkgs: List[RikoPkg], new_pkgs: List[RikoPkg]) -> None:
     """
-    Process Armbian Orange Pi RV2 board images
+    Process Armbian Muse Pi Pro board images
     """
     for i, new_pkg in enumerate(new_pkgs):
         new_toml: Dict = new_pkg.get_manifest()[0]
@@ -22,10 +22,3 @@ def rikoring(old_pkgs: List[RikoPkg], new_pkgs: List[RikoPkg]) -> None:
         old_version = old_pkgs[i].get_upstream_version() if i < len(old_pkgs) else upstream_version
         new_toml["metadata"]["desc"] = (
             new_toml["metadata"]["desc"].replace(old_version, upstream_version))
-
-        # Replace download URL with mirror URL
-        for d in new_toml.get("distfiles", []):
-            urls = d.get("urls", [])
-            if urls:
-                old_url = "https://fi.mirror.armbian.de/cache/artifacts/orangepirv2/archive/"
-                urls[0] = urls[0].replace(old_url, "mirror://armbian/armbian-orangepi-rv2/")
