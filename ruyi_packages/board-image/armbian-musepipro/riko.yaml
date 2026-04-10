@@ -10,6 +10,6 @@ source:
 armbian-musepipro:
   metadata:
     desc: f"Armbian {upstream_version} image for Muse Pi Pro"
-  version: version(major=upstream_version.split('.')[0], minor=upstream_version.split('.')[1], patch=upstream_version.split('.')[2])
+  version: "0.0.0"
   distfiles:
-    - name: disk(regex(f"^Armbian_{upstream_version}_Musepipro_[\\w]+_[\\w]+_[\\w.-]+\\.img\\.xz$"))
+    - name: disk(regex(f"^Armbian_{upstream_version}_Musepipro_[\\w]+_current_6\\.[\\w.-]+_minimal\\.img\\.xz$"))
