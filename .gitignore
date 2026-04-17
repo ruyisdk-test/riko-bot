@@ -20,3 +20,5 @@ config/config.toml
 .env
 
 /tests
+
+/version-dry-run_docs
