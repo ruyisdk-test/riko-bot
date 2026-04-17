@@ -119,15 +119,23 @@ class ManifestService:
                     if "keep_back" in riko_toml.get_policy(c):
                         # keep_back 策略: 使用最新的 manifest 作为基础
                         pkg_ver = get_riko().get_packages_index_latest(riko_toml.get_category(), c)
-                        pkg_ver.add_policies(riko_toml.get_policy(c))
-                        logger.debug(f"no ruyi packages-index manifest for category `{riko_toml.get_category()}` "
-                                     f"package {c} version {old_ver} found")
-                        logger.debug(f"use `keep_back` policy, find ruyi packages-index manifest of category "
-                                     f"`{riko_toml.get_category()}` package {c} version {pkg_ver.upstream_version}")
-                        logger.info(f"{up_name} manifest {c} combo base on old version `{pkg_ver.upstream_version}`")
+                        if pkg_ver is not None:
+                            pkg_ver.add_policies(riko_toml.get_policy(c))
+                            logger.debug(f"no ruyi packages-index manifest for category `{riko_toml.get_category()}` "
+                                         f"package {c} version {old_ver} found")
+                            logger.debug(f"use `keep_back` policy, find ruyi packages-index manifest of category "
+                                         f"`{riko_toml.get_category()}` package {c} version {pkg_ver.upstream_version}")
+                            logger.info(f"{up_name} manifest {c} combo base on old version `{pkg_ver.upstream_version}`")
+                        else:
+                            logger.info(f"No ruyi packages-index manifest for category `{riko_toml.get_category()}` "
+                                        f"package {c} version {old_ver} found, and no latest version found")
+                            logger.info(f"Use placeholder version 0.0.0 for {c}")
+                            pkg_ver = PackageVersion(semver.Version.parse("0.0.0"), "0.0.0", {})
                     else:
                         logger.info(f"No ruyi packages-index manifest for category `{riko_toml.get_category()}` "
                                     f"package {c} version {old_ver} found")
+                        logger.info(f"Use placeholder version 0.0.0 for {c}")
+                        pkg_ver = PackageVersion(semver.Version.parse("0.0.0"), "0.0.0", {})
                 gen_cbs_ov.append(pkg_ver)
             else:
                 # 对于新包，使用 0.0.0 作为占位版本
@@ -996,7 +1004,13 @@ class ManifestService:
                 # 创建目录并写入 toml 文件
                 ensure_dir(riko_manifests_dir / v.get_category())
                 ensure_dir(riko_manifests_dir / v.get_category() / v.get_combo())
-                new_toml = riko_manifests_dir / v.get_category() / v.get_combo() / f"{str(v.get_version())}.toml"
+                # 对于包含 -trunk 的版本（如 armbian-musepipro），使用完整的 upstream_version 作为文件名
+                upstream_ver = ma.get("metadata", {}).get("upstream_version", "")
+                if upstream_ver and "-trunk" in upstream_ver:
+                    version_str = upstream_ver
+                else:
+                    version_str = str(v.get_version())
+                new_toml = riko_manifests_dir / v.get_category() / v.get_combo() / f"{version_str}.toml"
                 with open(new_toml, "wb") as nt:
                     tomli_w.dump(ma, nt)
 
