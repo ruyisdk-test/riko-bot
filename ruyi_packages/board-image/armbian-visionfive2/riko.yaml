@@ -7,9 +7,16 @@ source:
       name: Armbian
       eula:
 
-armbian-visionfive2:
+armbian-visionfive2-minimal:
   metadata:
-    desc: f"Armbian {upstream_version} image for StarFive VisionFive 2"
+    desc: f"Armbian {upstream_version} image for StarFive VisionFive 2 (minimal)"
   version: "0.0.0"
   distfiles:
     - name: disk(regex(f"^Armbian_community_{upstream_version}_Visionfive2_[\\w]+_vendor_6\\.[\\w.-]+_minimal\\.img\\.xz$"))
+
+armbian-visionfive2-desktop:
+  metadata:
+    desc: f"Armbian {upstream_version} image for StarFive VisionFive 2 (xfce desktop)"
+  version: "0.0.0"
+  distfiles:
+    - name: disk(regex(f"^Armbian_community_{upstream_version}_Visionfive2_[\\w]+_vendor_6\\.[\\w.-]+_xfce_desktop\\.img\\.xz$"))

@@ -7,9 +7,16 @@ source:
       name: Armbian
       eula:
 
-armbian-orangepirv2:
+armbian-orangepirv2-minimal:
   metadata:
-    desc: f"Armbian {upstream_version} image for Orange Pi RV2"
+    desc: f"Armbian {upstream_version} image for Orange Pi RV2 (minimal)"
   version: "0.0.0"
   distfiles:
     - name: disk(regex(f"^Armbian_community_{upstream_version}_Orangepirv2_[\\w]+_current_6\\.[\\w.-]+_minimal\\.img\\.xz$"))
+
+armbian-orangepirv2-desktop:
+  metadata:
+    desc: f"Armbian {upstream_version} image for Orange Pi RV2 (xfce desktop)"
+  version: "0.0.0"
+  distfiles:
+    - name: disk(regex(f"^Armbian_community_{upstream_version}_Orangepirv2_[\\w]+_current_6\\.[\\w.-]+_xfce_desktop\\.img\\.xz$"))

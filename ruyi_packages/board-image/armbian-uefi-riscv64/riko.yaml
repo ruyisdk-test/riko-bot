@@ -7,9 +7,16 @@ source:
       name: Armbian
       eula:
 
-armbian-uefi-riscv64:
+armbian-uefi-riscv64-minimal:
   metadata:
-    desc: f"Armbian {upstream_version} image for UEFI RISC-V64"
-  version: "26.2.0"
+    desc: f"Armbian {upstream_version} image for UEFI RISC-V64 (minimal)"
+  version: "0.0.0"
   distfiles:
     - name: disk(regex(f"^Armbian_community_{upstream_version}_Uefi-riscv64_[\\w]+_current_6\\.[\\w.-]+_minimal\\.img\\.xz$"))
+
+armbian-uefi-riscv64-desktop:
+  metadata:
+    desc: f"Armbian {upstream_version} image for UEFI RISC-V64 (xfce desktop)"
+  version: "0.0.0"
+  distfiles:
+    - name: disk(regex(f"^Armbian_community_{upstream_version}_Uefi-riscv64_[\\w]+_current_6\\.[\\w.-]+_xfce_desktop\\.img\\.xz$"))

@@ -5,6 +5,7 @@ use_latest_release = true
 
 [entities]
 image-combo = [
-    "armbian-orangepirv2",
+    "armbian-orangepirv2-minimal",
+    "armbian-orangepirv2-desktop",
 ]
 
