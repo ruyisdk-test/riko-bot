@@ -26,22 +26,51 @@ class VersionDiff:
         package_name: 包名（如：freebsd）
         combo_name: combo 名称（如：freebsd-riscv64-mini-live）
         upstream_versions: 上游可用版本集合
-        repo_versions: 仓库已有版本集合
-        to_delete: 需要删除的版本（仓库有但上游没有）
-        to_add: 需要添加的版本（上游有但仓库没有）
-        has_changes: 是否有变更
+
+        # 本地 cache 相关（实际要增删的）
+        cache_versions: Set[str]
+        cache_to_add: Set[str]      # 实际要添加
+        cache_to_delete: Set[str]   # 实际要删除
+
+        # 远程仓库相关（仅展示参考）
+        remote_versions: Set[str]
+        remote_to_add: Set[str]
+        remote_to_delete: Set[str]
+
+        has_changes: bool  # 基于 cache 判断
     """
     package_name: str
     combo_name: str
     upstream_versions: Set[str]
-    repo_versions: Set[str]
-    to_delete: Set[str]
-    to_add: Set[str]
+
+    # 本地 cache 相关
+    cache_versions: Set[str]
+    cache_to_add: Set[str]
+    cache_to_delete: Set[str]
+
+    # 远程仓库相关
+    remote_versions: Set[str]
+    remote_to_add: Set[str]
+    remote_to_delete: Set[str]
+
     has_changes: bool
+
+    # 兼容性别名（用于旧代码）
+    @property
+    def repo_versions(self) -> Set[str]:
+        return self.cache_versions
+
+    @property
+    def to_add(self) -> Set[str]:
+        return self.cache_to_add
+
+    @property
+    def to_delete(self) -> Set[str]:
+        return self.cache_to_delete
 
     def summary(self) -> str:
         """
-        生成差异摘要
+        生成差异摘要（基于 cache）
 
         :return: 差异摘要字符串
 
@@ -49,10 +78,10 @@ class VersionDiff:
             "freebsd-riscv64-mini-live: +1 versions, -2 versions"
         """
         parts = []
-        if self.to_add:
-            parts.append(f"+{len(self.to_add)} versions")
-        if self.to_delete:
-            parts.append(f"-{len(self.to_delete)} versions")
+        if self.cache_to_add:
+            parts.append(f"+{len(self.cache_to_add)} versions")
+        if self.cache_to_delete:
+            parts.append(f"-{len(self.cache_to_delete)} versions")
 
         if parts:
             return f"{self.combo_name}: {', '.join(parts)}"
@@ -61,7 +90,7 @@ class VersionDiff:
 
     def detailed_summary(self) -> str:
         """
-        生成详细差异报告
+        生成详细差异报告（区分 cache 和 remote）
 
         :return: 详细报告字符串
 
@@ -71,13 +100,23 @@ class VersionDiff:
             f"Combo: {self.combo_name}",
         ]
 
-        if self.to_add:
-            lines.append(f"To Add: {', '.join(sorted(self.to_add))}")
-        if self.to_delete:
-            lines.append(f"To Delete: {', '.join(sorted(self.to_delete))}")
+        # Cache 变更（实际要执行的）
+        if self.cache_to_add or self.cache_to_delete:
+            lines.append("\n[Local Cache] Actual changes to apply:")
+            if self.cache_to_add:
+                lines.append(f"  To Add: {', '.join(sorted(self.cache_to_add))}")
+            if self.cache_to_delete:
+                lines.append(f"  To Delete: {', '.join(sorted(self.cache_to_delete))}")
+        else:
+            lines.append("\n[Local Cache] No changes needed")
 
-        if not self.to_add and not self.to_delete:
-            lines.append("No changes needed")
+        # Remote 变更（仅展示参考）
+        if self.remote_to_add or self.remote_to_delete:
+            lines.append("\n[Remote Repo] Reference only (not applied):")
+            if self.remote_to_add:
+                lines.append(f"  To Add: {', '.join(sorted(self.remote_to_add))}")
+            if self.remote_to_delete:
+                lines.append(f"  To Delete: {', '.join(sorted(self.remote_to_delete))}")
 
         return '\n'.join(lines)
 
@@ -126,9 +165,12 @@ class VersionComparator:
             package_name=package_name,
             combo_name=combo_name,
             upstream_versions=upstream_versions,
-            repo_versions=repo_versions,
-            to_delete=to_delete,
-            to_add=to_add,
+            cache_versions=repo_versions,
+            cache_to_add=to_add,
+            cache_to_delete=to_delete,
+            remote_versions=set(),
+            remote_to_add=set(),
+            remote_to_delete=set(),
             has_changes=has_changes
         )
 
@@ -137,21 +179,78 @@ class VersionComparator:
         package_name: str,
         combo_name: str,
         upstream_versions: Set[str],
-        repo_versions_info: dict
+        cache_versions_info: dict,
+        remote_versions_info: dict = None
     ) -> VersionDiff:
         """
         使用版本映射信息对比版本差异
 
+        同时计算：
+        - cache vs upstream（实际要执行的变更）
+        - remote vs upstream（仅展示参考）
+
         这个方法考虑了版本格式的差异，通过 manifest 文件中的 upstream_version
         字段来准确判断两个版本是否相同。
 
+        :param cache_versions_info: 本地 cache 版本信息（实际变更）
+        :param remote_versions_info: 远程仓库版本信息（仅参考）
         """
-        file_versions = repo_versions_info.get("file_versions", set())
-        repo_upstream_versions = repo_versions_info.get("upstream_versions", set())
-        mapping = repo_versions_info.get("mapping", {})
+        if remote_versions_info is None:
+            remote_versions_info = cache_versions_info
+
+        # 计算 cache 变更
+        cache_to_add, cache_to_delete = self._compute_diff(
+            upstream_versions, cache_versions_info
+        )
+
+        # 计算 remote 变更（仅参考）
+        remote_to_add, remote_to_delete = self._compute_diff(
+            upstream_versions, remote_versions_info
+        )
+
+        cache_file_versions = cache_versions_info.get("file_versions", set())
+        remote_file_versions = remote_versions_info.get("file_versions", set())
+
+        has_changes = bool(cache_to_delete or cache_to_add)
+
+        logger.debug(f"Compared versions for {combo_name}: "
+                   f"upstream={len(upstream_versions)}, "
+                   f"cache_files={len(cache_file_versions)}, "
+                   f"remote_files={len(remote_file_versions)}, "
+                   f"cache_to_add={len(cache_to_add)}, "
+                   f"cache_to_delete={len(cache_to_delete)}, "
+                   f"remote_to_add={len(remote_to_add)}, "
+                   f"remote_to_delete={len(remote_to_delete)}")
+
+        return VersionDiff(
+            package_name=package_name,
+            combo_name=combo_name,
+            upstream_versions=upstream_versions,
+            cache_versions=cache_file_versions,
+            cache_to_add=cache_to_add,
+            cache_to_delete=cache_to_delete,
+            remote_versions=remote_file_versions,
+            remote_to_add=remote_to_add,
+            remote_to_delete=remote_to_delete,
+            has_changes=has_changes
+        )
+
+    def _compute_diff(
+        self,
+        upstream_versions: Set[str],
+        versions_info: dict
+    ) -> tuple:
+        """
+        计算版本差异的内部方法
+
+        :return: (to_add, to_delete) 元组
+        """
+        file_versions = versions_info.get("file_versions", set())
+        upstream_in_file_versions = versions_info.get("upstream_versions", set())
+        mapping = versions_info.get("mapping", {})
 
         # 需要添加的版本：上游有但仓库没有的（通过 upstream_version 判断）
-        to_add = upstream_versions - repo_upstream_versions
+        to_add = upstream_versions - upstream_in_file_versions
 
         # 需要删除的版本：仓库有但上游没有的（检查 upstream_version）
         to_delete = set()
@@ -167,24 +266,7 @@ class VersionComparator:
                 to_delete.add(file_version)
                 logger.debug(f"Version {file_version} (no upstream mapping) not in upstream, marking for deletion")
 
-        has_changes = bool(to_delete or to_add)
-
-        logger.debug(f"Compared versions for {combo_name}: "
-                   f"upstream={len(upstream_versions)}, "
-                   f"repo_files={len(file_versions)}, "
-                   f"repo_upstream={len(repo_upstream_versions)}, "
-                   f"to_add={len(to_add)}, "
-                   f"to_delete={len(to_delete)}")
-
-        return VersionDiff(
-            package_name=package_name,
-            combo_name=combo_name,
-            upstream_versions=upstream_versions,
-            repo_versions=file_versions,  # 使用文件名版本作为 repo_versions
-            to_delete=to_delete,
-            to_add=to_add,
-            has_changes=has_changes
-        )
+        return to_add, to_delete
 
     @staticmethod
     def parse_version_from_filename(filename: str) -> str:

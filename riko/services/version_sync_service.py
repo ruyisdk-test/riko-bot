@@ -179,6 +179,52 @@ class VersionSyncService:
         return info
 
     @staticmethod
+    def get_cache_versions_info(combo_name: str) -> dict:
+        """
+        获取本地 cache 中已有版本信息
+
+        扫描 riko_manifests_dir / "board-image" / {combo_name} 目录，
+        从所有 .toml 文件中提取版本号和 upstream_version。
+
+        :param combo_name: combo 名称
+        :return: 版本信息字典
+        """
+        import tomllib
+
+        info = {
+            "file_versions": set(),
+            "upstream_versions": set(),
+            "mapping": {}  # file_version -> upstream_version
+        }
+
+        combo_dir = riko_manifests_dir / "board-image" / combo_name
+
+        if not combo_dir.exists():
+            logger.debug(f"Cache combo directory not found: {combo_dir}")
+            return info
+
+        for manifest_file in combo_dir.glob("*.toml"):
+            # 提取文件名中的版本
+            file_version = VersionComparator.parse_version_from_filename(manifest_file.name)
+            info["file_versions"].add(file_version)
+
+            # 读取 manifest 文件中的 upstream_version
+            try:
+                with open(manifest_file, "rb") as f:
+                    manifest_data = tomllib.load(f)
+                    upstream_version = manifest_data.get("metadata", {}).get("upstream_version")
+                    if upstream_version:
+                        info["upstream_versions"].add(upstream_version)
+                        info["mapping"][file_version] = upstream_version
+                        logger.debug(f"Cache mapping: {file_version} -> {upstream_version}")
+            except Exception as e:
+                logger.debug(f"Failed to read cache manifest file {manifest_file}: {e}")
+
+        logger.debug(f"Found {len(info['file_versions'])} cache file versions, "
+                   f"{len(info['upstream_versions'])} cache upstream versions for {combo_name}")
+        return info
+
+    @staticmethod
     @record_command("version-sync")
     def sync_all(args: argparse.Namespace) -> None:
         """
@@ -247,16 +293,20 @@ class VersionSyncService:
 
             # 对该包的每个 combo（镜像组合）进行版本对比
             for combo_name in combos:
-                # 获取仓库版本信息和版本映射
-                repo_versions_info = VersionSyncService.get_repo_versions_info(combo_name)
+                # 获取本地 cache 版本信息（实际要增删的）
+                cache_versions_info = VersionSyncService.get_cache_versions_info(combo_name)
 
-                # 对比版本
+                # 获取远程仓库版本信息（仅展示参考）
+                remote_versions_info = VersionSyncService.get_repo_versions_info(combo_name)
+
+                # 对比版本（同时计算 cache 和 remote 的差异）
                 comparator = VersionComparator()
                 diff = comparator.compare_with_mappings(
                     package_name=package_name,
                     combo_name=combo_name,
                     upstream_versions=upstream_versions,
-                    repo_versions_info=repo_versions_info
+                    cache_versions_info=cache_versions_info,
+                    remote_versions_info=remote_versions_info
                 )
 
                 if diff.has_changes:
@@ -269,21 +319,67 @@ class VersionSyncService:
 
         # 3. 打印总结报告
         logger.info("=" * 70)
-        logger.info("Version sync summary")
+        logger.info("VERSION SYNC SUMMARY")
         logger.info("=" * 70)
         logger.info(f"Total packages scanned: {len(packages)}")
         logger.info(f"Total combos with changes: {len(all_diffs)}")
 
         if all_diffs:
-            total_to_add = sum(len(d.to_add) for d in all_diffs)
-            total_to_delete = sum(len(d.to_delete) for d in all_diffs)
-            logger.info(f"Total versions to add: {total_to_add}")
-            logger.info(f"Total versions to delete: {total_to_delete}")
+            # 基于 cache 计算实际变更统计
+            total_cache_to_add = sum(len(d.cache_to_add) for d in all_diffs)
+            total_cache_to_delete = sum(len(d.cache_to_delete) for d in all_diffs)
 
-            # 打印所有变更
-            logger.info("\nChanges to be made:")
+            # 检查 remote 目录是否存在且有内容
+            has_remote_info = any(len(d.remote_versions) > 0 for d in all_diffs)
+
+            # 打印最终变更统计
+            logger.info("")
+            logger.info("-" * 70)
+            logger.info("FINAL CHANGES (local cache vs upstream)")
+            logger.info("-" * 70)
+            logger.info(f"  Versions to ADD:    {total_cache_to_add}")
+            logger.info(f"  Versions to DELETE: {total_cache_to_delete}")
+            logger.info("")
+
+            # 打印每个 combo 的变更详情
+            logger.info("Details:")
             for diff in all_diffs:
-                logger.info(f"  {diff.summary()}")
+                parts = []
+                if diff.cache_to_add:
+                    parts.append(f"+{len(diff.cache_to_add)}")
+                if diff.cache_to_delete:
+                    parts.append(f"-{len(diff.cache_to_delete)}")
+                action = ", ".join(parts) if parts else "no changes"
+                logger.info(f"  [{action}] {diff.combo_name}")
+
+            # Remote 参考信息（仅当 remote 有内容时显示）
+            if has_remote_info:
+                total_remote_to_add = sum(len(d.remote_to_add) for d in all_diffs)
+                total_remote_to_delete = sum(len(d.remote_to_delete) for d in all_diffs)
+
+                logger.info("")
+                logger.info("-" * 70)
+                logger.info("REFERENCE ONLY (remote repo vs upstream)")
+                logger.info("-" * 70)
+                logger.info(f"  Would add:    {total_remote_to_add}")
+                logger.info(f"  Would delete: {total_remote_to_delete}")
+
+                # 显示 cache 和 remote 的差异
+                cache_only = total_cache_to_add - total_remote_to_add
+                remote_only = total_remote_to_add - total_cache_to_add
+                if cache_only != 0 or remote_only != 0:
+                    logger.info("")
+                    logger.info("  Difference from remote:")
+                    if cache_only > 0:
+                        logger.info(f"    Cache has {cache_only} more versions to add than remote")
+                    if remote_only > 0:
+                        logger.info(f"    Remote has {remote_only} more versions to add than cache")
+            else:
+                logger.info("")
+                logger.info("-" * 70)
+                logger.info("NOTE: Remote repo (packages-index) not found or empty")
+                logger.info("      Showing only local cache vs upstream comparison")
+                logger.info("-" * 70)
 
         # 4. 如果是预览模式，只打印报告不执行实际操作
         if dry_run:
@@ -360,11 +456,12 @@ class VersionSyncService:
             except git.GitError as e:
                 logger.warning(f"Failed to clean untracked files: {e}")
 
-            # 切换到目标分支（默认为 pr）并从远程拉取最新更新
+            # 切换到目标分支（默认为 main）并从远程拉取最新更新
             logger.info(f"Checking out base branch: {base_branch}")
             try:
                 repo.git.checkout(base_branch)
-                repo.git.pull("origin", base_branch)
+                # 使用 --ff-only 避免 divergent branches 问题，如果本地与远程分歧则失败
+                repo.git.pull("origin", base_branch, ff_only=True)
             except git.GitError as e:
                 logger.error(f"Failed to checkout base branch: {e}")
                 recorder.record_pr_creation(
@@ -532,20 +629,10 @@ class VersionSyncService:
                 origin = repo.remote(name="origin")
                 remote_url = origin.url
 
-                # 使用 Git credential helper
-                if remote_url.startswith("https://"):
-                    credential_data = f"protocol=https\nhost=github.com\nusername={gh_token}\npassword=x-oauth-basic\n"
-                    try:
-                        subprocess.run(
-                            ["git", "credential", "approve"],
-                            input=credential_data,
-                            capture_output=True,
-                            text=True,
-                            check=True,
-                            cwd=VersionSyncService.PACKAGES_INDEX_ROOT
-                        )
-                    except subprocess.CalledProcessError as e:
-                        logger.warning(f"Failed to approve git credential: {e}")
+                # 使用 token 嵌入 URL 的方式认证
+                if remote_url.startswith("https://") and gh_token:
+                    token_url = f"https://{gh_token}@github.com/{repo_owner}/{repo_name}.git"
+                    origin.set_url(token_url)
 
                 try:
                     repo.git.push("origin", feature_branch)
@@ -553,20 +640,10 @@ class VersionSyncService:
                 except git.GitError as e:
                     logger.error(f"Failed to push: {e}")
                     raise
-
-                # 清除凭据
-                if remote_url.startswith("https://"):
-                    try:
-                        subprocess.run(
-                            ["git", "credential", "reject"],
-                            input=f"protocol=https\nhost=github.com\nusername={gh_token}\n",
-                            capture_output=True,
-                            text=True,
-                            check=False,
-                            cwd=VersionSyncService.PACKAGES_INDEX_ROOT
-                        )
-                    except Exception as e:
-                        logger.debug(f"Failed to clear git credential: {e}")
+                finally:
+                    # 恢复原始 URL，避免 token 泄露
+                    if remote_url.startswith("https://") and gh_token:
+                        origin.set_url(remote_url)
 
                 logger.info("✓ Git operations completed successfully")
 
