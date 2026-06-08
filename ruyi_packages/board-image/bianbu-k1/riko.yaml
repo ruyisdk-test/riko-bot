@@ -11,34 +11,46 @@ bianbu-minimal-spacemit-k1:
   metadata:
     desc: f"Official Bianbu Minimal {upstream_version} for SpacemiT K1"
   distfiles:
-    - name: titan(regex(f"^bianbu-[\\d]+\\.[\\d]+-desktop-k1-{upstream_version}-release-[\\d]+.zip$"))
+    - name: titan(regex(f"^Bianbu-Minimal-K1-V.+.zip$"))
 
 bianbu-desktop-spacemit-k1:
   metadata:
     desc: f"Official Bianbu Desktop {upstream_version} for SpacemiT K1"
   distfiles:
-    - name: titan(regex(f"^bianbu-[\\d]+\\.[\\d]+-desktop-k1-{upstream_version}-release-[\\d]+.zip$"))
-
-bianbu-minimal-spacemit-k1-sd:
-  metadata:
-    desc: f"Official Bianbu Minimal {upstream_version} for SpacemiT K1"
-  distfiles:
-    - name: disk(regex(f"^bianbu-[\\d]+\\.[\\d]+-minimal-k1-{upstream_version}-release-[\\d]+.img.zip$"))
+    - name: titan(regex(f"^Bianbu-GNOME-K1-V.+.zip$"))
 
 bianbu-desktop-lite-spacemit-k1:
   metadata:
     desc: f"Official Bianbu Desktop Lite {upstream_version} for SpacemiT K1"
   distfiles:
-    - name: titan(regex(f"^bianbu-[\\d]+\\.[\\d]+-desktop-lite-k1-{upstream_version}-release-[\\d]+.zip$"))
+    - name: titan(regex(f"^Bianbu-LXQt-K1-V[^UEFI]+.zip$"))
+
+bianbu-desktop-lite-uefi-spacemit-k1:
+  metadata:
+    desc: f"Official Bianbu Desktop Lite {upstream_version} for SpacemiT K1"
+  distfiles:
+    - name: titan(regex(f"^Bianbu-LXQt-K1-V.+-UEFI-.+.zip$"))
+
+bianbu-minimal-spacemit-k1-sd:
+  metadata:
+    desc: f"Official Bianbu Minimal {upstream_version} for SpacemiT K1"
+  distfiles:
+    - name: disk(regex(f"^Bianbu-Minimal-K1-sdcard-V.+.zip$"))
 
 bianbu-desktop-spacemit-k1-sd:
   metadata:
     desc: f"Official Bianbu Desktop {upstream_version} for SpacemiT K1"
   distfiles:
-    - name: disk(regex(f"^bianbu-[\\d]+\\.[\\d]+-desktop-k1-{upstream_version}-release-[\\d]+.img.zip$"))
+    - name: disk(regex(f"^Bianbu-GNOME-K1-sdcard-V.+.zip$"))
 
 bianbu-desktop-lite-spacemit-k1-sd:
   metadata:
     desc: f"Official Bianbu Desktop Lite {upstream_version} for SpacemiT K1"
   distfiles:
-    - name: disk(regex(f"^bianbu-[\\d]+\\.[\\d]+-desktop-lite-k1-{upstream_version}-release-[\\d]+.img.zip$"))
+    - name: disk(regex(f"^Bianbu-LXQt-K1-sdcard-V[^UEFI]+.zip$"))
+
+bianbu-desktop-lite-uefi-spacemit-k1-sd:
+  metadata:
+    desc: f"Official Bianbu Desktop Lite {upstream_version} for SpacemiT K1"
+  distfiles:
+    - name: disk(regex(f"^Bianbu-LXQt-K1-sdcard-V.+-UEFI-.+.zip$"))

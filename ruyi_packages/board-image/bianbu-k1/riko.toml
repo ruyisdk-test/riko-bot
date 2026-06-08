@@ -6,7 +6,7 @@ regex = '<a href="(v[\d.]+)/">[v\d.]+/</a>'
 [source]
 regex_file_url = "{{nvchecker.url}}{{upstream_version}}/"
 # skip alpha, beta, rc versions
-regex_file_regex = '<a href="(bianbu.+)">bianbu.+</a>'
+regex_file_regex = '<a href="(.+)">.+</a>'
 
 [entities]
 image-combo = [
@@ -16,4 +16,6 @@ image-combo = [
     "bianbu-desktop-spacemit-k1-sd",
     "bianbu-desktop-lite-spacemit-k1",
     "bianbu-desktop-lite-spacemit-k1-sd",
+    "bianbu-desktop-lite-uefi-spacemit-k1",
+    "bianbu-desktop-lite-uefi-spacemit-k1-sd",
 ]
