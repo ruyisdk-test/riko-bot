@@ -9,7 +9,7 @@ source:
 
 armbian-musepipro:
   metadata:
-    desc: f"Armbian {upstream_version} image for Muse Pi Pro"
+    desc: f"Armbian Minimal {upstream_version} image for SpacemiT Muse Pi Pro"
   version: "0.0.0"
   distfiles:
     - name: disk(regex(f"^Armbian_{upstream_version}_Musepipro_[\\w]+_current_6\\.[\\w.-]+_minimal\\.img\\.xz$"))
