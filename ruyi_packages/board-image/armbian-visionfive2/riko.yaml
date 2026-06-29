@@ -14,7 +14,7 @@ armbian-visionfive2-minimal:
   distfiles:
     - name: disk(regex(f"^Armbian_community_{upstream_version}_Visionfive2_[\\w]+_vendor_6\\.[\\w.-]+_minimal\\.img\\.xz$"))
 
-armbian-visionfive2-desktop:
+armbian-visionfive2-xfce:
   metadata:
     desc: f"Armbian {upstream_version} image for StarFive VisionFive 2 (xfce desktop)"
   version: "0.0.0"
