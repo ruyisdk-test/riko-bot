@@ -14,7 +14,7 @@ armbian-orangepirv2-minimal:
   distfiles:
     - name: disk(regex(f"^Armbian_community_{upstream_version}_Orangepirv2_[\\w]+_current_6\\.[\\w.-]+_minimal\\.img\\.xz$"))
 
-armbian-orangepirv2-desktop:
+armbian-orangepirv2-xfce:
   metadata:
     desc: f"Armbian {upstream_version} image for Orange Pi RV2 (xfce desktop)"
   version: "0.0.0"
