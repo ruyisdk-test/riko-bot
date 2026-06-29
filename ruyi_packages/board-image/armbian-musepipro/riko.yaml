@@ -7,9 +7,16 @@ source:
       name: Armbian
       eula:
 
-armbian-musepipro:
+armbian-musepipro-minimal:
   metadata:
     desc: f"Armbian Minimal {upstream_version} image for SpacemiT Muse Pi Pro"
   version: "0.0.0"
   distfiles:
     - name: disk(regex(f"^Armbian_{upstream_version}_Musepipro_[\\w]+_current_6\\.[\\w.-]+_minimal\\.img\\.xz$"))
+
+armbian-musepipro-xfce:
+  metadata:
+    desc: f"Armbian xfce desktop {upstream_version} image for SpacemiT Muse Pi Pro"
+  version: "0.0.0"
+  distfiles:
+    - name: disk(regex(f"^Armbian_{upstream_version}_Musepipro_[\\w]+_current_6\\.[\\w.-]+_xfce_desktop\\.img\\.xz$"))
