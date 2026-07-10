@@ -6,5 +6,5 @@ use_latest_release = true
 [entities]
 image-combo = [
     "armbian-uefi-riscv64-minimal",
-    "armbian-uefi-riscv64-desktop",
+    "armbian-uefi-riscv64-xfce",
 ]
