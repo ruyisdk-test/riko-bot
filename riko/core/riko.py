@@ -5,11 +5,12 @@ import logging
 import semver
 import tomli_w
 
+from pathlib import Path
 from typing import Dict, List
 
 # 导入配置常量（需要在 rikoriko 中使用的路径）
-from ..config.const import ruyi_cache_dir, nvchecker_config, nvchecker_result, nvchecker_old_ver, nvchecker_new_ver, \
-    ruyi_pkgs_dir
+from ..config.const import ruyi_packages_index_dir, nvchecker_config, nvchecker_result, nvchecker_old_ver, \
+    nvchecker_new_ver, ruyi_pkgs_dir
 from ..nvchecker.results import NvcheckerResults
 from ..packages_index.packages_index import PackagesIndex
 from ..packages_index.manifests import PackageVersion
@@ -21,9 +22,19 @@ logger = logging.getLogger(__name__)
 class Riko:
 
     def __init__(self):
-        self._packages_index: PackagesIndex = PackagesIndex(ruyi_cache_dir / "ruyi" / "packages-index")
+        self._packages_index: PackagesIndex = PackagesIndex(ruyi_packages_index_dir)
         self._ruyi_packages: RuyiPackages = RuyiPackages(ruyi_pkgs_dir)
         self._nvchecker_result: NvcheckerResults = NvcheckerResults(nvchecker_result)
+
+    def set_packages_index_dir(self, path: Path) -> None:
+        """将 packages-index 加载路径切换为 ruyi 实际报告的仓库路径。
+
+        ``check`` 阶段通过 ``ruyi --porcelain repo list`` 解析出的路径可能
+        与 const 中的固定路径不同（例如 ruyi 升级后忽略 [repo].local）。
+        这里允许在 ``generate_nvchecker_old_ver`` 前覆盖，确保“路径校验”和
+        “实际加载”使用的是同一个目录。
+        """
+        self._packages_index = PackagesIndex(path)
 
     def load_from_cache(self) -> None:
         try:
@@ -56,12 +67,18 @@ class Riko:
         for up in self._ruyi_packages.get_upstreams().values():
             name = up.get_name()
             cat = self._packages_index.get_category(up.get_category())
+            if cat is None:
+                logger.debug(f"category '{up.get_category()}' not found in packages-index for upstream '{name}'")
+                old_data[name] = {"version": ""}
+                continue
 
             version = semver.Version(0, 0, 0)
             upstream_version = ""
 
             for pkg in up.get_combos():
                 ver = self.get_packages_index_latest(cat.get_name(), pkg)
+                if ver is None:
+                    continue
                 if ver.version.compare(version) > 0:
                     version = ver.version
                     upstream_version = ver.upstream_version
@@ -92,21 +109,38 @@ class Riko:
     def get_packages_index(self) -> PackagesIndex:
         return self._packages_index
 
-    def get_packages_index_latest(self, category: str, pkg: str) -> PackageVersion:
+    def get_packages_index_latest(self, category: str, pkg: str) -> PackageVersion | None:
+        cat = self._packages_index.get_category(category)
+        if cat is None:
+            return None
+        p = cat.get_package(pkg)
+        if p is None:
+            return None
+
         version = semver.Version(0, 0, 0)
         package_version = None
 
-        for v in self._packages_index.get_category(category).get_package(pkg).get_versions():
+        for v in p.get_versions():
             if v.version.compare(version) > 0:
                 if v.upstream_version is None or v.upstream_version == "":
                     continue
                 version = v.version
                 package_version = v
 
+        if package_version is None:
+            return None
+
         return self.get_packages_index_manifest(category, pkg, package_version.upstream_version)
 
     def get_packages_index_manifest(self, category: str, pkg: str, up_ver: str) -> PackageVersion | None:
-        for v in self._packages_index.get_category(category).get_package(pkg).get_versions():
+        cat = self._packages_index.get_category(category)
+        if cat is None:
+            return None
+        p = cat.get_package(pkg)
+        if p is None:
+            return None
+
+        for v in p.get_versions():
             if v.upstream_version == up_ver:
                 return v
 

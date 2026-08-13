@@ -10,10 +10,12 @@ import logging
 import os
 import subprocess
 
+from pathlib import Path
 from typing import Dict, List
 
 from ..config.const import basedir, nvchecker_datadir, riko_datadir, ruyi_datadir, ruyi_cache_dir, ruyi_state_dir, \
-    ruyi_data_dir, ruyi_config_dir, ruyi_config, ruyi_config_extra, nvchecker_config, nvchecker_result, nvchecker_key
+    ruyi_data_dir, ruyi_config_dir, ruyi_config, ruyi_config_extra, nvchecker_config, nvchecker_result, nvchecker_key, \
+    ruyi_packages_index_dir
 from ..core import get_riko
 from ..database import record_command, get_recorder
 from ..interfaces.cli.utils import ensure_dir
@@ -65,6 +67,100 @@ class CheckService:
         env['XDG_STATE_HOME'] = str(ruyi_state_dir)
 
     @staticmethod
+    def _repair_ruyi_cache() -> bool:
+        """
+        修复 ruyi packages-index 缓存目录的 git 状态
+
+        当 ``ruyi update`` 因 git 快进失败而报错时，通过 ``git fetch`` +
+        ``git reset --hard`` 将本地缓存重置到远端状态。
+
+        :return: 修复是否成功
+        """
+        cache_path = CheckService._resolve_ruyi_packages_index_dir()
+        if not (cache_path / ".git").exists():
+            return False
+        try:
+            subprocess.run(
+                ["git", "fetch", "origin"],
+                cwd=str(cache_path),
+                capture_output=True,
+                check=True,
+                timeout=60,
+            )
+            subprocess.run(
+                ["git", "reset", "--hard", "FETCH_HEAD"],
+                cwd=str(cache_path),
+                capture_output=True,
+                check=True,
+                timeout=30,
+            )
+            subprocess.run(
+                ["git", "clean", "-fd"],
+                cwd=str(cache_path),
+                capture_output=True,
+                check=True,
+                timeout=30,
+            )
+            logger.info("Repaired ruyi cache: git fetch + reset --hard successful")
+            return True
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Failed to repair ruyi cache via git reset: {e}")
+            return False
+
+    @staticmethod
+    def _ruyi_update() -> bytes:
+        """运行 ``ruyi update``，返回 stdout/stderr 内容"""
+        cmd: List[str] = ["ruyi", "update"]
+        env = os.environ.copy()
+        CheckService._ensure_ruyi_env(env)
+
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+        output, _ = process.communicate()
+
+        ret = process.returncode
+        if ret != 0:
+            raise subprocess.CalledProcessError(ret, cmd, output)
+        return output
+
+    @staticmethod
+    def _resolve_ruyi_packages_index_dir() -> Path:
+        """
+        解析 ruyi 实际使用的 packages-index 仓库路径
+
+        通过 ``ruyi --porcelain repo list`` 查询 ruyi 报告的 local_path，
+        与 const 中固定的路径（沙箱配置里 [repo] local 指定的稳定路径）
+        核对。若 ruyi 报告了不同的实际路径（例如 ruyi 升级后忽略
+        repo.local 或改变内部布局），以 ruyi 报告为准；解析失败时
+        回退到 const 固定路径。
+
+        :return: ruyi 实际使用的仓库路径
+        """
+        try:
+            env = os.environ.copy()
+            CheckService._ensure_ruyi_env(env)
+            process = subprocess.run(
+                ["ruyi", "--porcelain", "repo", "list"],
+                capture_output=True,
+                env=env,
+                timeout=30,
+                check=True,
+            )
+            for line in process.stdout.decode("utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                entry = json.loads(line)
+                if entry.get("id") == "ruyisdk":
+                    local_path = entry.get("local_path")
+                    if local_path:
+                        return Path(local_path)
+                    break
+        except Exception as e:
+            logger.warning(f"Failed to resolve ruyi packages-index path via `ruyi repo list`: {e}")
+
+        return ruyi_packages_index_dir
+
+    @staticmethod
     @record_command("check")
     def run() -> None:
         """
@@ -83,24 +179,30 @@ class CheckService:
             cfg.write(ruyi_config + "\n" + ruyi_config_extra)
 
         logger.info("run `ruyi update`")
-        cmd: List[str] = ["ruyi", "update"]
-        env = os.environ.copy()
-        rfd, wfd = os.pipe()
+        try:
+            CheckService._ruyi_update()
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"ruyi update failed (exit {e.returncode}), attempting to repair git cache")
+            if CheckService._repair_ruyi_cache():
+                logger.info("retrying `ruyi update` after cache repair")
+                CheckService._ruyi_update()
+            else:
+                raise
 
-        CheckService._ensure_ruyi_env(env)
-        process = subprocess.Popen(cmd, stdout=wfd, stderr=wfd, env=env)
-        os.close(wfd)
+        # 解析 ruyi 实际报告的仓库路径，与 const 固定路径核对
+        packages_index_dir = CheckService._resolve_ruyi_packages_index_dir()
+        if packages_index_dir != ruyi_packages_index_dir:
+            logger.warning(
+                f"ruyi reports packages-index at {packages_index_dir}, "
+                f"different from fixed path {ruyi_packages_index_dir}; using reported path"
+            )
+        if not packages_index_dir.exists():
+            raise FileNotFoundError(packages_index_dir)
+        logger.info(f"packages-index repo: {packages_index_dir}")
 
-        out = os.fdopen(rfd)
-        output = out.read()
-        out.close()
-
-        ret = process.wait()
-        if ret != 0:
-            raise subprocess.CalledProcessError(ret, cmd, output)
-
-        if not (ruyi_cache_dir / "ruyi" / "packages-index").exists():
-            raise FileNotFoundError(ruyi_cache_dir / "ruyi" / "packages-index")
+        # 将 ruyi 实际报告的仓库路径同步给 Riko，避免后续
+        # generate_nvchecker_old_ver() 仍从 const 固定路径加载旧版本。
+        get_riko().set_packages_index_dir(packages_index_dir)
 
         logger.info("prepare for `nvchecker`")
         get_riko().generate_nvchecker_config()
