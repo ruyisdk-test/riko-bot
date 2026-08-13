@@ -34,6 +34,9 @@ ruyi_packages_index_dir = ruyi_datadir / "packages-index"
 
 ruyi_pkgs_dir = basedir / "ruyi_packages"
 
+# version-sync --dry-run 生成的日志与 Markdown 报告输出目录
+dry_run_docs_dir = basedir / "version-dry-run_docs"
+
 riko_datadir = datadir / (settings.riko_dir or 'riko')
 riko_cache_dir = riko_datadir / 'cache'
 riko_manifests_dir = riko_datadir / 'manifests'

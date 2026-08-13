@@ -14,17 +14,26 @@
 import argparse
 import logging
 import tomllib
+from datetime import datetime
 from typing import Dict, List, Set, Any
 
 import git
 
 from .manifest_service import ManifestService
 from .pr_service import PRService
-from ..config.const import basedir, riko_manifests_dir, ruyi_pkgs_dir
+from ..config.const import basedir, dry_run_docs_dir, riko_manifests_dir, ruyi_pkgs_dir
 from ..database import get_recorder
 from ..database import record_command
 from ..upstreams.version_fetcher import VersionFetcher
 from ..utils.version_comparator import VersionComparator, VersionDiff
+from ..utils.version_sync_report import (
+    MirrorReportRow,
+    STATUS_CHANGED,
+    STATUS_SKIPPED,
+    STATUS_UNCHANGED,
+    generate_version_sync_markdown,
+    write_version_sync_report,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -266,6 +275,10 @@ class VersionSyncService:
         # 存储所有有变更的版本差异
         all_diffs = []
 
+        # 存储所有镜像的报告行（含变更/无变更/跳过），用于生成 Markdown 报告
+        report_rows: List[MirrorReportRow] = []
+        total_combos = 0
+
         # 2. 遍历每个包，对比上游版本与仓库版本
         for package_name, package_info in packages.items():
             nvchecker = package_info["nvchecker"]
@@ -273,10 +286,22 @@ class VersionSyncService:
 
             if not nvchecker:
                 logger.warning(f"No nvchecker config for {package_name}")
+                report_rows.append(MirrorReportRow(
+                    package_name=package_name,
+                    combo_name="（无 nvchecker 配置）",
+                    status=STATUS_SKIPPED,
+                    skip_reason="无 nvchecker 配置",
+                ))
                 continue
 
             if not combos:
                 logger.warning(f"No combos defined for {package_name}")
+                report_rows.append(MirrorReportRow(
+                    package_name=package_name,
+                    combo_name="（未定义镜像）",
+                    status=STATUS_SKIPPED,
+                    skip_reason="未定义 image-combo",
+                ))
                 continue
 
             # 创建版本获取器，用于从上游获取版本列表
@@ -289,10 +314,18 @@ class VersionSyncService:
             # 如果获取上游版本失败（为空），跳过该包
             if not upstream_versions:
                 logger.warning(f"Skipping {package_name}: no upstream versions found (possible network error)")
+                report_rows.append(MirrorReportRow(
+                    package_name=package_name,
+                    combo_name=f"（全部 {len(combos)} 个镜像）",
+                    status=STATUS_SKIPPED,
+                    skip_reason="上游版本获取失败（可能网络错误）",
+                ))
                 continue
 
             # 对该包的每个 combo（镜像组合）进行版本对比
             for combo_name in combos:
+                total_combos += 1
+
                 # 获取本地 cache 版本信息（实际要增删的）
                 cache_versions_info = VersionSyncService.get_cache_versions_info(combo_name)
 
@@ -311,11 +344,26 @@ class VersionSyncService:
 
                 if diff.has_changes:
                     all_diffs.append(diff)
+                    report_rows.append(MirrorReportRow(
+                        package_name=package_name,
+                        combo_name=combo_name,
+                        upstream_versions=upstream_versions,
+                        to_add=diff.cache_to_add,
+                        to_delete=diff.cache_to_delete,
+                        status=STATUS_CHANGED,
+                    ))
                     logger.info(f"✓ {diff.summary()}")
 
                     # 打印详细报告
                     if args.verbose:
                         logger.info("\n" + diff.detailed_summary() + "\n")
+                else:
+                    report_rows.append(MirrorReportRow(
+                        package_name=package_name,
+                        combo_name=combo_name,
+                        upstream_versions=upstream_versions,
+                        status=STATUS_UNCHANGED,
+                    ))
 
         # 3. 打印总结报告
         logger.info("=" * 70)
@@ -381,8 +429,22 @@ class VersionSyncService:
                 logger.info("      Showing only local cache vs upstream comparison")
                 logger.info("-" * 70)
 
-        # 4. 如果是预览模式，只打印报告不执行实际操作
+        # 4. 如果是预览模式，生成 Markdown 报告并退出
         if dry_run:
+            # 生成 Markdown 报告，与 .log 日志文件同名配对
+            markdown = generate_version_sync_markdown(
+                rows=report_rows,
+                generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                dry_run=True,
+                total_packages=len(packages),
+                total_combos=total_combos,
+            )
+
+            report_dir = getattr(args, 'dry_run_report_dir', None) or dry_run_docs_dir
+            report_timestamp = getattr(args, 'dry_run_timestamp', "")
+            report_file = write_version_sync_report(markdown, report_dir, report_timestamp)
+            logger.info(f"Dry-run report saved to: {report_file}")
+
             logger.info("\nDry run completed. No changes were made.")
             logger.info("Run without --dry-run to apply changes.")
             return
