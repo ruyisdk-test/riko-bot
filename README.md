@@ -35,31 +35,31 @@ Riko follows a **three-tier architecture** pattern for clean separation of conce
 
 ```
 ┌──────────────────────────────────────────────┐
-│         interfaces/ (接口层)                  │
+│         interfaces/ (Interface Layer)        │
 │  CLI (interfaces/cli/)  API (interfaces/api/)│
 │  - User interaction                          │
 │  - Request handling                          │
 └──────────────────┬───────────────────────────┘
-                   │ 依赖
+                   │ depends on
                    ▼
 ┌─────────────────────────────────────────────┐
-│         services/ (服务层)                   │
+│         services/ (Service Layer)           │
 │  - Business logic orchestration             │
 │  - Service coordination                     │
 │  - Workflow management                      │
 └──────────────────┬──────────────────────────┘
-                   │ 依赖
+                   │ depends on
                    ▼
 ┌─────────────────────────────────────────────┐
-│          core/ (核心层)                      │
+│          core/ (Core Layer)                 │
 │  - Domain models                            │
 │  - Business rules                           │
 │  - Data access objects                      │
 └──────────────────┬──────────────────────────┘
-                   │ 依赖
+                   │ depends on
                    ▼
 ┌─────────────────────────────────────────────┐
-│        基础模块                              │
+│        Base modules                         │
 │  config, database, nvchecker,               │
 │  packages_index, ruyi_packages, upstreams   │
 └─────────────────────────────────────────────┘
@@ -90,20 +90,20 @@ Riko follows a **three-tier architecture** pattern for clean separation of conce
 ```
 riko-packaging/
 ├── riko/
-│   ├── core/                       # 【核心层】业务逻辑和数据模型
-│   │   ├── riko.py                 # 核心业务类
-│   │   └── models.py               # 数据模型
+│   ├── core/                       # Core layer: business logic and data models
+│   │   ├── riko.py                 # Core business class
+│   │   └── models.py               # Data models
 │   │
-│   ├── services/                   # 【服务层】业务服务编排
-│   │   ├── check_service.py        # 版本检查服务
-│   │   ├── manifest_service.py     # 清单生成服务
-│   │   ├── pr_service.py           # PR 创建服务
-│   │   ├── scheduler_service.py    # 调度器服务
-│   │   ├── telegramBot_service.py  # Telegram 机器人服务
-│   │   └── version_sync_service.py # 版本对比更改服务
+│   ├── services/                   # Service layer: business service orchestration
+│   │   ├── check_service.py        # Version check service
+│   │   ├── manifest_service.py     # Manifest generation service
+│   │   ├── pr_service.py           # PR creation service
+│   │   ├── scheduler_service.py    # Scheduler service
+│   │   ├── telegramBot_service.py  # Telegram bot service
+│   │   └── version_sync_service.py # Version sync service
 │   │
-│   ├── interfaces/                # 【接口层】外部接口
-│   │   ├── cli/                  # CLI 命令
+│   ├── interfaces/                # Interface layer: external interfaces
+│   │   ├── cli/                  # CLI commands
 │   │   │   ├── check.py
 │   │   │   ├── list.py
 │   │   │   ├── manifests.py
@@ -112,8 +112,8 @@ riko-packaging/
 │   │   │   └── version_sync.py
 │   │   │
 │   │   └── api/                  # Web API
-│   │       ├── app.py            # FastAPI 应用
-│   │       ├── routes/           # 路由模块
+│   │       ├── app.py            # FastAPI application
+│   │       ├── routes/           # Route modules
 │   │       │   ├── check_routes.py
 │   │       │   ├── manifest_routes.py
 │   │       │   ├── pr_routes.py
@@ -121,22 +121,22 @@ riko-packaging/
 │   │       │   ├── telegramBot_routes.py 
 │   │       │   └── versions_sync_routes.py
 │   │       └── models/
-│   │           └── schemas.py     # Pydantic 模型
+│   │           └── schemas.py     # Pydantic models
 │   │
-│   ├── config/                    # 配置模块
-│   ├── database/                  # 数据库模块
-│   ├── nvchecker/                 # 版本检查模块
-│   ├── packages_index/            # 包索引模块
-│   ├── ruyi_packages/             # Ruyi 包模块
-│   ├── upstreams/                 # 上游源模块
-│   ├── utils/                     # 工具模块
+│   ├── config/                    # Configuration module
+│   ├── database/                  # Database module
+│   ├── nvchecker/                 # Version check module
+│   ├── packages_index/            # Package index module
+│   ├── ruyi_packages/             # Ruyi package module
+│   ├── upstreams/                 # Upstream source module
+│   ├── utils/                     # Utilities module
 │   ├── __init__.py
-│   └── __main__.py               # CLI 入口
+│   └── __main__.py               # CLI entry point
 │
-├── config/                        # 配置文件模板
-├── .env.example                   # 环境变量模板
-├── pyproject.toml                # 项目配置
-└── README.md                     # 本文件
+├── config/                        # Configuration file template
+├── .env.example                   # Environment variable template
+├── pyproject.toml                # Project configuration
+└── README.md                     # This file
 ```
 
 ## Installation
