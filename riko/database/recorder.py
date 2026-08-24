@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# riko/database/recorder.py - 统一数据库记录工具
-"""
-为所有 CLI 命令提供数据库记录功能
-
-使用装饰器模式，自动记录命令执行过程
-"""
-
 import logging
 import functools
 from typing import Optional, Dict, Any, Callable
@@ -18,57 +10,43 @@ from .models import ScanRecord, PackageUpdate, ManifestRecord, PRRecord
 
 logger = logging.getLogger(__name__)
 
-# 触发源上下文
-# 使用 ContextVar 来存储当前请求的触发源（线程安全）
+# ContextVar keeps the trigger source thread-safe
 _trigger_source_context: ContextVar[str] = ContextVar('trigger_source', default='cli')
 
 
 def set_trigger_source(source: str) -> None:
-    """设置触发源上下文"""
     _trigger_source_context.set(source)
 
 
 def get_trigger_source() -> str:
-    """获取当前触发源"""
     return _trigger_source_context.get()
 
 
-# 统一记录器
 class CommandRecorder:
-    """
-    命令执行记录器
-
-    为所有 CLI 命令提供统一的数据库记录接口
-    """
 
     def __init__(self):
         self.db = get_database()
         self.current_scan_id: Optional[int] = None
         self.current_manifest_id: Optional[int] = None
-        self._scan_depth: int = 0  # scan 嵌套深度
-        self._scan_finished: bool = False  # 标记 scan 是否已完成
+        self._scan_depth: int = 0  # scan nesting depth
+        self._scan_finished: bool = False  # whether the scan is finished
 
-    # 扫描记录
     def start_scan(
         self,
         command: str,
         trigger_source: str = "cli"
     ) -> ScanRecord:
-        """
-        开始扫描记录
-        """
         self._scan_depth += 1
 
         if self.current_scan_id is not None:
-            # 已有活动的 scan，复用它（避免重复记录）
+            # Reuse the active scan for nested commands
             logger.debug(f"[DB] Reusing existing scan {self.current_scan_id} for nested command: {command} (depth: {self._scan_depth})")
             return self.db.get_scan_by_id(self.current_scan_id)
 
-        # 没有活动的 scan，创建新的
-        # 根据 trigger_source 确定 scan_type
+        # Create a new scan
         scan_type = "scheduled" if trigger_source == "scheduler" else "manual"
 
-        # 只在创建新 scan 时重置完成标志
+        # Reset the finished flag only for a new scan
         self._scan_finished = False
 
         scan = self.db.create_scan_record(
@@ -88,17 +66,14 @@ class CommandRecorder:
         success_packages: int = 0,
         failed_packages: int = 0
     ) -> Optional[ScanRecord]:
-        """
-        完成扫描记录
-        """
         self._scan_depth -= 1
 
         if self._scan_depth > 0:
-            # 嵌套调用，不真正完成 scan
+            # Nested call: do not actually finish
             logger.debug(f"[DB] Nested finish_scan called (depth: {self._scan_depth}), skipping actual finish")
             return None
 
-        # 检查是否已经完成过（避免重复调用）
+        # Avoid duplicate finish calls
         if self._scan_finished:
             logger.debug(f"[DB] Scan already finished, skipping duplicate finish_scan call")
             return None
@@ -118,11 +93,10 @@ class CommandRecorder:
         )
 
         logger.info(f"[DB] Finished scan {scan.id}: {status} (total={total_packages}, updated={updated_packages})")
-        self._scan_finished = True  # 标记为已完成
-        self.current_scan_id = None  # 清除 scan ID
+        self._scan_finished = True
+        self.current_scan_id = None
         return scan
 
-    # 版本检查记录
     def record_version_check(
         self,
         package_name: str,
@@ -132,11 +106,8 @@ class CommandRecorder:
         nvchecker_event: Optional[str] = None,
         nvchecker_url: Optional[str] = None
     ) -> PackageUpdate:
-        """
-        记录版本检查结果
-        """
         if not self.current_scan_id:
-            # 如果没有活动扫描，自动创建一个
+            # Auto-create a scan if none is active
             self.start_scan(command="check")
 
         pkg_update = self.db.create_package_update(
@@ -152,30 +123,26 @@ class CommandRecorder:
         logger.info(f"[DB] Recorded version check: {package_name} {old_version} → {new_version}")
         return pkg_update
 
-    # Manifest 生成记录
     def record_manifest_generation(
         self,
         package_name: str,
         combo_name: str,
         version: str,
         status: str,  # 'success' / 'failed' / 'skipped'
-        # 成功时的字段
+        # success fields
         manifest_path: Optional[str] = None,
         manifest_size: Optional[int] = None,
         manifest_hash: Optional[str] = None,
-        # 失败时的字段
+        # failure fields
         error_type: Optional[str] = None,
         error_message: Optional[str] = None,
         error_code: Optional[int] = None,
         error_details: Optional[str] = None,
-        # 跳过时的字段
+        # skip fields
         skip_reason: Optional[str] = None
     ) -> ManifestRecord:
-        """
-        记录 Manifest 生成结果
-        """
         if not self.current_scan_id:
-            # 如果没有活动扫描，自动创建一个
+            # Auto-create a scan if none is active
             self.start_scan(command="manifests")
 
         manifest = self.db.create_manifest_record(
@@ -197,31 +164,27 @@ class CommandRecorder:
         logger.info(f"[DB] Recorded manifest generation: {package_name}/{combo_name} - {status}")
         return manifest
 
-    # PR 创建记录
     def record_pr_creation(
         self,
         package_name: str,
         version: str,
         status: str,  # 'success' / 'failed' / 'skipped'
         manifest_id: Optional[int] = None,
-        # 成功时的字段
+        # success fields
         pr_number: Optional[int] = None,
         pr_url: Optional[str] = None,
         branch_name: Optional[str] = None,
         repo_owner: Optional[str] = None,
         repo_name: Optional[str] = None,
-        # 失败时的字段
+        # failure fields
         error_type: Optional[str] = None,
         error_message: Optional[str] = None,
         error_details: Optional[str] = None,
-        # 跳过时的字段
+        # skip fields
         skip_reason: Optional[str] = None
     ) -> PRRecord:
-        """
-        记录 PR 创建结果
-        """
         if not self.current_scan_id:
-            # 如果没有活动扫描，自动创建一个
+            # Auto-create a scan if none is active
             self.start_scan(command="pr")
 
         pr = self.db.create_pr_record(
@@ -247,7 +210,6 @@ class CommandRecorder:
 
         return pr
 
-    # 通用失败记录方法
     def record_error(
         self,
         package_name: str,
@@ -256,41 +218,36 @@ class CommandRecorder:
         version: Optional[str] = None,
         include_traceback: bool = True
     ) -> ManifestRecord:
-        """
-        记录错误到 manifest_records 表
-        """
         if not self.current_scan_id:
-            # 如果没有活动扫描，自动创建一个
+            # Auto-create a scan if none is active
             self.start_scan(command="unknown")
 
-        # 提取错误信息
         error_type = type(error).__name__
         error_message = str(error)
         error_code = getattr(error, 'code', None) or getattr(error, 'status', None)
 
-        # 构建错误详情
         error_details_dict: Dict[str, Any] = {
             "error_type": error_type,
             "error_message": error_message
         }
 
-        # 添加 HTTP 状态码（如果有）
+        # Add HTTP status code if present
         if error_code:
             error_details_dict["error_code"] = error_code
 
-        # 添加堆栈跟踪
+        # Add traceback
         if include_traceback:
             error_details_dict["traceback"] = format_exception(type(error), error, error.__traceback__)
 
-        # 转换为 JSON 字符串
+        # Serialize to JSON
         import json
         error_details_json = json.dumps(error_details_dict)
 
-        # 创建 manifest 失败记录
+        # Record the failure
         manifest = self.db.create_manifest_record(
             scan_id=self.current_scan_id,
             package_name=package_name,
-            combo_name="",  # 错误记录时 combo 可以为空
+            combo_name="",  # combo may be empty for errors
             version=version or "unknown",
             status="failed",
             error_type=error_type,
@@ -303,12 +260,10 @@ class CommandRecorder:
         return manifest
 
 
-# 全局记录器实例
 _global_recorder: Optional[CommandRecorder] = None
 
 
 def get_recorder() -> CommandRecorder:
-    """获取全局记录器实例"""
     global _global_recorder
     if _global_recorder is None:
         _global_recorder = CommandRecorder()
@@ -316,22 +271,17 @@ def get_recorder() -> CommandRecorder:
 
 
 def record_command(command_name: str):
-    """
-    装饰器：自动记录命令执行
-    """
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             recorder = get_recorder()
 
-            # 开始记录（从上下文获取触发源）
+            # Start recording using the context trigger source
             scan = recorder.start_scan(command=command_name, trigger_source=get_trigger_source())
 
             try:
-                # 执行命令
                 result = func(*args, **kwargs)
 
-                # 完成记录
                 recorder.finish_scan(status="completed")
 
                 return result
@@ -339,7 +289,7 @@ def record_command(command_name: str):
             except Exception as e:
                 logger.error(f"[DB] Command {command_name} failed: {e}")
 
-                # 完成记录（失败状态，捕获可能的异常）
+                # Finish with failed status
                 try:
                     recorder.finish_scan(
                         status="failed",
@@ -348,6 +298,6 @@ def record_command(command_name: str):
                 except Exception as db_err:
                     logger.error(f"[DB] Failed to finish scan: {db_err}")
 
-                raise  # 重新抛出异常
+                raise
         return wrapper
     return decorator

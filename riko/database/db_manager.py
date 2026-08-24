@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# riko/database/db_manager.py - 数据库管理器
-"""
-提供数据库初始化、会话管理和常用查询方法
-
-"""
-
 import logging
 from pathlib import Path
 from contextlib import contextmanager
@@ -21,50 +14,35 @@ from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# 泛型类型变量
 T = TypeVar('T', bound=Base)
 
 
-# 数据库管理器
 class DatabaseManager:
-    """
-    数据库管理器
-
-    1. 数据库初始化和连接管理
-    2. 提供会话管理（上下文管理器）
-    3. 提供常用的数据库操作方法
-    """
 
     def __init__(self, db_path: str | Path):
-        """
-        初始化数据库管理器
-        """
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 创建数据库引擎
-        # 使用配置的数据库 URL，或者使用默认路径
+        # Use the configured URL or default to the sqlite path
         database_url = settings.database_url or f"sqlite:///{self.db_path}"
 
-        # 针对 SQLite 的安全配置
+        # SQLite requires check_same_thread=False
         connect_args = {
-            "check_same_thread": False,  # 仍然需要，但配合 scoped_session 使用更安全
+            "check_same_thread": False,
         }
-        # 添加额外的前缀参数以启用 WAL 模式和其他优化
         if database_url.startswith("sqlite:///"):
-            # 为 SQLite 添加优化参数
+            # Add SQLite timeout/isolation options
             database_url = f"{database_url}?timeout=20&isolation_level=None"
 
         self.engine = create_engine(
             database_url,
             echo=settings.database_echo,
             connect_args=connect_args,
-            poolclass=StaticPool,  # SQLite 使用静态连接池
-            pool_pre_ping=True,  # 连接前检查连接有效性
+            poolclass=StaticPool,  # SQLite uses a static connection pool
+            pool_pre_ping=True,
         )
 
-        # 使用 scoped_session 确保线程安全
-        # scoped_session 会为每个线程创建独立的会话实例
+        # scoped_session gives each thread its own session
         self.SessionLocal = scoped_session(
             sessionmaker(
                 autocommit=False,
@@ -76,7 +54,6 @@ class DatabaseManager:
         logger.info(f"Database initialized: {self.db_path}")
 
     def create_tables(self) -> None:
-        """创建所有表（如果不存在）"""
         try:
             Base.metadata.create_all(bind=self.engine)
             logger.info("Database tables created successfully")
@@ -85,7 +62,6 @@ class DatabaseManager:
             raise
 
     def drop_tables(self) -> None:
-        """删除所有表"""
         try:
             Base.metadata.drop_all(bind=self.engine)
             logger.warning("All database tables dropped")
@@ -95,11 +71,6 @@ class DatabaseManager:
 
     @contextmanager
     def get_session(self):
-        """
-        获取数据库会话（上下文管理器）
-
-        线程安全：scoped_session 确保每个线程获得独立的会话
-        """
         session = self.SessionLocal()
         try:
             yield session
@@ -109,16 +80,10 @@ class DatabaseManager:
             logger.error(f"Database session error: {e}")
             raise
         finally:
-            # 对于 scoped_session，close() 会将会话返回到池中
-            # 而不是真正关闭连接
+            # close() returns the session to the pool instead of closing the connection
             session.close()
 
-    # 扫描记录相关方法
-
     def get_scan_by_id(self, scan_id: int) -> ScanRecord:
-        """
-        根据 ID 获取扫描记录
-        """
         with self.get_session() as session:
             record = session.query(ScanRecord).filter(ScanRecord.id == scan_id).first()
             if record:
@@ -131,9 +96,6 @@ class DatabaseManager:
         trigger_source: Optional[str] = None,
         status: str = "running"
     ) -> ScanRecord:
-        """
-        创建新的扫描记录
-        """
         with self.get_session() as session:
             record = ScanRecord(
                 scan_type=scan_type,
@@ -142,19 +104,16 @@ class DatabaseManager:
                 start_time=datetime.now()
             )
             session.add(record)
-            session.flush()  # 获取 ID
-            session.expunge(record)  # 将对象从 session 中分离
+            session.flush()  # get the generated ID
+            session.expunge(record)  # detach from session
             return record
-        # 上下文管理器退出时会自动提交
+        # The context manager commits on exit
 
     def update_scan_record(
         self,
         scan_id: int,
         **kwargs
     ) -> Optional[ScanRecord]:
-        """
-        更新扫描记录
-        """
         with self.get_session() as session:
             record = session.get(ScanRecord, scan_id)
             if record:
@@ -171,20 +130,15 @@ class DatabaseManager:
         limit: int = 10,
         status: Optional[str] = None
     ) -> List[ScanRecord]:
-        """
-        获取最近的扫描记录
-        """
         with self.get_session() as session:
             query = session.query(ScanRecord)
             if status:
                 query = query.filter(ScanRecord.status == status)
             results = query.order_by(ScanRecord.scan_time.desc()).limit(limit).all()
-            # 将所有对象从 session 中分离
+            # detach objects from session
             for obj in results:
                 session.expunge(obj)
             return results
-
-    # 包更新记录相关方法
 
     def create_package_update(
         self,
@@ -196,7 +150,6 @@ class DatabaseManager:
         nvchecker_event: Optional[str] = None,
         nvchecker_url: Optional[str] = None
     ) -> PackageUpdate:
-        """创建包更新记录"""
         with self.get_session() as session:
             record = PackageUpdate(
                 scan_id=scan_id,
@@ -213,7 +166,6 @@ class DatabaseManager:
             return record
 
     def get_updates_by_scan(self, scan_id: int) -> List[PackageUpdate]:
-        """获取某个扫描的所有更新记录"""
         with self.get_session() as session:
             results = session.query(PackageUpdate).filter(
                 PackageUpdate.scan_id == scan_id
@@ -222,8 +174,6 @@ class DatabaseManager:
                 session.expunge(obj)
             return results
 
-    # Manifest 记录相关方法
-
     def create_manifest_record(
         self,
         scan_id: int,
@@ -231,38 +181,35 @@ class DatabaseManager:
         combo_name: str,
         version: str,
         status: str,  # 'success' / 'failed' / 'skipped'
-        # 成功时的字段
+        # success fields
         manifest_path: Optional[str] = None,
         manifest_size: Optional[int] = None,
         manifest_hash: Optional[str] = None,
-        # 失败时的字段
+        # failure fields
         error_type: Optional[str] = None,
         error_message: Optional[str] = None,
         error_code: Optional[int] = None,
         error_details: Optional[str] = None,
-        # 跳过时的字段
+        # skip fields
         skip_reason: Optional[str] = None
     ) -> ManifestRecord:
-        """
-        创建 Manifest 生成记录
-        """
         with self.get_session() as session:
             record = ManifestRecord(
                 scan_id=scan_id,
                 package_name=package_name,
                 combo_name=combo_name,
                 version=version,
-                status=status,  # 统一的状态字段
-                # 成功时的字段
+                status=status,  # unified status field
+                # success fields
                 manifest_path=manifest_path,
                 manifest_size=manifest_size,
                 manifest_hash=manifest_hash,
-                # 失败时的字段
+                # failure fields
                 error_type=error_type,
                 error_message=error_message,
                 error_code=error_code,
                 error_details=error_details,
-                # 跳过时的字段
+                # skip fields
                 skip_reason=skip_reason
             )
             session.add(record)
@@ -275,9 +222,6 @@ class DatabaseManager:
         manifest_id: int,
         **kwargs
     ) -> Optional[ManifestRecord]:
-        """
-        更新 Manifest 记录
-        """
         with self.get_session() as session:
             record = session.get(ManifestRecord, manifest_id)
             if record:
@@ -289,8 +233,6 @@ class DatabaseManager:
                 return record
             return None
 
-    # PR 记录相关方法
-
     def create_pr_record(
         self,
         scan_id: int,
@@ -298,40 +240,37 @@ class DatabaseManager:
         version: str,
         status: str,  # 'success' / 'failed' / 'skipped'
         manifest_id: Optional[int] = None,
-        # 成功时的字段
+        # success fields
         pr_number: Optional[int] = None,
         pr_url: Optional[str] = None,
         branch_name: Optional[str] = None,
         repo_owner: Optional[str] = None,
         repo_name: Optional[str] = None,
-        # 失败时的字段
+        # failure fields
         error_type: Optional[str] = None,
         error_message: Optional[str] = None,
         error_details: Optional[str] = None,
-        # 跳过时的字段
+        # skip fields
         skip_reason: Optional[str] = None
     ) -> PRRecord:
-        """
-        创建 PR 记录
-        """
         with self.get_session() as session:
             record = PRRecord(
                 scan_id=scan_id,
                 manifest_id=manifest_id,
                 package_name=package_name,
                 version=version,
-                status=status,  # 统一的状态字段
-                # 成功时的字段
+                status=status,  # unified status field
+                # success fields
                 repo_owner=repo_owner,
                 repo_name=repo_name,
                 pr_number=pr_number,
                 pr_url=pr_url,
                 branch_name=branch_name,
-                # 失败时的字段
+                # failure fields
                 error_type=error_type,
                 error_message=error_message,
                 error_details=error_details,
-                # 跳过时的字段
+                # skip fields
                 skip_reason=skip_reason
             )
             session.add(record)
@@ -339,19 +278,13 @@ class DatabaseManager:
             session.expunge(record)
             return record
 
-    # 通用查询方法
-
     def get_by_id(self, model: Type[T], record_id: int) -> Optional[T]:
-        """
-        根据 ID 获取记录
-        """
         from sqlalchemy.orm import selectinload
 
         with self.get_session() as session:
-            # 构建查询，包含所有可能的关系
             query = session.query(model)
 
-            # 根据模型类型预加载相应的关系
+            # Eager-load relationships depending on the model type
             if model == ScanRecord:
                 query = query.options(
                     selectinload(ScanRecord.package_updates),
@@ -372,23 +305,16 @@ class DatabaseManager:
             return result
 
     def count_records(self, model: Type[T]) -> int:
-        """统计某个模型的记录数"""
         with self.get_session() as session:
             return session.query(func.count(model.id)).scalar()
 
 
-# 全局数据库实例
 def get_database(db_path: Optional[str | Path] = None) -> DatabaseManager:
-    """
-    获取数据库管理器实例
-    """
     from ..config.const import basedir
 
     if db_path is None:
-        # 默认数据库路径
         db_path = basedir / "cache" / "riko" / "riko_history.db"
 
     db = DatabaseManager(db_path)
-    # 自动创建数据库表（如果不存在）
     db.create_tables()
     return db

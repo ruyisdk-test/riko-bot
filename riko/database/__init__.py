@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# riko/database/__init__.py - 数据库模块
-"""
-数据库模块，用于记录扫描历史
-
-"""
-
 from .models import (
     Base,
     ScanRecord,

@@ -1,5 +1,3 @@
-# riko/database/models.py - 数据库模型
-
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from sqlalchemy import (
@@ -55,23 +53,16 @@ class ScanRecord(Base):
     )
 
     def set_metadata(self, data: Dict[str, Any]) -> None:
-        """设置元数据"""
         self.meta_data = json.dumps(data)
 
     def get_metadata(self) -> Dict[str, Any]:
-        """获取元数据"""
         return json.loads(self.meta_data) if self.meta_data else {}
 
     def __repr__(self) -> str:
         return f"<ScanRecord(id={self.id}, scan_time={self.scan_time}, status={self.status})>"
 
 
-# 包更新记录表
 class PackageUpdate(Base):
-    """
-    包更新记录表 - 保持不变
-    记录每个包的版本检查结果
-    """
     __tablename__ = 'package_updates'
     __table_args__ = (
         Index('idx_package_updates_scan', 'scan_id'),
