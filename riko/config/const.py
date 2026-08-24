@@ -1,5 +1,3 @@
-# riko/config/const.py - 配置常量定义
-
 from pathlib import Path
 
 from .settings import settings
@@ -8,9 +6,7 @@ basedir = Path(__file__).resolve().parent.parent.parent
 
 datadir = settings.cache_dir or (basedir / 'cache')
 if not datadir.is_absolute():
-    # cache_dir 可能配置为相对路径（如 config.toml 里的 "./cache"），
-    # 基于项目根目录解析为绝对路径。ruyi 的 [repo] local 要求绝对路径，
-    # 相对路径会被 ruyi 忽略。
+    # ruyi [repo] local requires an absolute path
     datadir = basedir / datadir
 
 nvchecker_datadir = datadir / 'nvchecker'
@@ -27,14 +23,12 @@ ruyi_data_dir = ruyi_datadir / 'local'
 ruyi_cache_dir = ruyi_datadir / 'cache'
 ruyi_state_dir = ruyi_datadir / 'state'
 
-# packages-index 仓库由 `ruyi update` clone 到 check 沙箱内固定的路径。
-# 该路径通过沙箱配置里的 [repo] local 显式固定，与 ruyi 内部布局
-# （新版为 $XDG_CACHE_HOME/ruyi/repos/<id>）解耦，避免 ruyi 升级改布局后失效。
+# packages-index is cloned here by `ruyi update`, decoupled from ruyi's internal repo layout
 ruyi_packages_index_dir = ruyi_datadir / "packages-index"
 
 ruyi_pkgs_dir = basedir / "ruyi_packages"
 
-# version-sync --dry-run 生成的日志与 Markdown 报告输出目录
+# output dir for version-sync --dry-run logs and Markdown reports
 dry_run_docs_dir = basedir / "version-dry-run_docs"
 
 riko_datadir = datadir / (settings.riko_dir or 'riko')

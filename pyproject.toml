@@ -19,8 +19,8 @@ semver = "^3.0.0"            # Semantic versioning
 PyYAML = "^6.0.1"            # YAML parsing
 tomli-w = "^1.0.0"           # TOML writing
 tomli = { version = "^1.0.0", python = "<3.11" }  # TOML reading for Python 3.10
-apscheduler = "^3.10.0"     # Task scheduler（定时任务调度器）
-SQLAlchemy = "^2.0.0"        # Database ORM（数据库 ORM）
+apscheduler = "^3.10.0"     # Task scheduler
+SQLAlchemy = "^2.0.0"        # Database ORM
 # Optional API server dependencies
 fastapi = { version = "^0.100.0", optional = true }  # Web API framework
 uvicorn = { version = "^0.23.0", optional = true }   # ASGI server
