@@ -1,5 +1,3 @@
-# riko/rikoriko.py - Riko 核心类
-
 import json
 import logging
 import semver
@@ -8,7 +6,6 @@ import tomli_w
 from pathlib import Path
 from typing import Dict, List
 
-# 导入配置常量（需要在 rikoriko 中使用的路径）
 from ..config.const import ruyi_packages_index_dir, nvchecker_config, nvchecker_result, nvchecker_old_ver, \
     nvchecker_new_ver, ruyi_pkgs_dir
 from ..nvchecker.results import NvcheckerResults
@@ -27,20 +24,13 @@ class Riko:
         self._nvchecker_result: NvcheckerResults = NvcheckerResults(nvchecker_result)
 
     def set_packages_index_dir(self, path: Path) -> None:
-        """将 packages-index 加载路径切换为 ruyi 实际报告的仓库路径。
-
-        ``check`` 阶段通过 ``ruyi --porcelain repo list`` 解析出的路径可能
-        与 const 中的固定路径不同（例如 ruyi 升级后忽略 [repo].local）。
-        这里允许在 ``generate_nvchecker_old_ver`` 前覆盖，确保“路径校验”和
-        “实际加载”使用的是同一个目录。
-        """
         self._packages_index = PackagesIndex(path)
 
     def load_from_cache(self) -> None:
         try:
-            self._ruyi_packages.load()    # 加载 ruyi_packages 配置
-            self._packages_index.load()   # 加载 packages-index 清单
-            self._nvchecker_result.load() # 加载 nvchecker 检查结果
+            self._ruyi_packages.load()
+            self._packages_index.load()
+            self._nvchecker_result.load()
         except FileNotFoundError:
             logger.warning("Riko cache not found, please run `riko check` first")
 
