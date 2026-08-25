@@ -5,7 +5,7 @@ import re
 import urllib.parse
 import urllib.request
 
-from typing import ClassVar, List, Tuple
+from typing import ClassVar, Dict, List, Optional, Tuple
 
 from .upstream import Upstream
 
@@ -96,3 +96,88 @@ class RegexUpstream(Upstream):
 
         assert len(r) == 1, f"Expected 1 result, got {len(r)}"
         return r[0]
+
+
+def build_regex_upstream(nv_dat: Dict[str, str], source: Dict[str, str], version: str) -> RegexUpstream:
+    # Shared by the version-check and manifest paths to keep URL/regex definitions in sync
+    file_url = source["regex_file_url"]
+    file_url = file_url.replace("{{nvchecker.url}}", nv_dat["url"])
+    file_url = file_url.replace("{{upstream_version}}", version)
+
+    file_regex = source["regex_file_regex"]
+    file_regex = file_regex.replace("{{upstream_version}}", version)
+
+    return RegexUpstream(nv_dat["url"], nv_dat["regex"], file_url, file_regex)
+
+
+def _version_key(v: str) -> Tuple[int, ...]:
+    # Split a version into numeric segments for comparison
+    return tuple(int(x) for x in re.findall(r"\d+", v))
+
+
+def _version_has_file(nv_dat: Dict[str, str], source: Dict[str, str], version: str) -> bool:
+    exists_re = source.get("file_exists_regex")
+    if not exists_re:
+        return False
+
+    try:
+        upstream = build_regex_upstream(nv_dat, source, version)
+        return len(upstream.get_release_asserts_regex(exists_re)) > 0
+    except Exception as e:
+        # Fail closed: fetch/parse errors mean the file cannot be confirmed
+        logger.warning(f"[file_exists] cannot verify version {version}: {e}")
+        return False
+
+
+def _find_newest_version_with_file(nv_dat: Dict[str, str], source: Dict[str, str]) -> Optional[str]:
+    try:
+        version_upstream = RegexUpstream(nv_dat["url"], nv_dat["regex"], nv_dat["url"], nv_dat["regex"])
+        raw_versions = version_upstream.get_release_asserts()
+    except Exception as e:
+        logger.warning(f"[file_exists] cannot fetch version list from {nv_dat.get('url')}: {e}")
+        return None
+
+    versions = []
+    for v in raw_versions:
+        cleaned = str(v).strip().strip("/")
+        if not cleaned or cleaned == ".." or cleaned == ".":
+            continue
+        versions.append(cleaned)
+
+    # Sort newest-first by numeric segments
+    versions.sort(key=_version_key, reverse=True)
+
+    for v in versions:
+        if _version_has_file(nv_dat, source, v):
+            logger.info(f"[file_exists] newest version with file: {v}")
+            return v
+
+    return None
+
+
+def resolve_file_exists_version(
+    nv_dat: Dict[str, str],
+    source: Dict[str, str],
+    reported_version: str,
+    old_version: str,
+) -> Tuple[str, str]:
+    if not source.get("file_exists_regex"):
+        return reported_version, "unchanged"
+
+    effective = reported_version
+
+    # 1. Use the reported version if it already has the target file
+    if not _version_has_file(nv_dat, source, reported_version):
+        # 2. Otherwise find the newest version that has the target file
+        effective = _find_newest_version_with_file(nv_dat, source)
+        if effective is None:
+            logger.warning(
+                f"[file_exists] no version with file {source['file_exists_regex']!r} found "
+                f"under {nv_dat.get('url')}"
+            )
+            return reported_version, "unchanged"
+
+    # 3. Compare with the old version to decide if this is an update
+    if old_version and _version_key(effective) > _version_key(old_version):
+        return effective, "updated"
+    return effective, "unchanged"

@@ -19,7 +19,7 @@ from ..config.const import riko_cache_dir, riko_manifests_dir, ruyi_pkgs_dir
 from ..packages_index.manifests import PackageVersion
 from ..core import get_riko
 from ..upstreams.github import GithubUpstream
-from ..upstreams.regex import RegexUpstream
+from ..upstreams.regex import RegexUpstream, build_regex_upstream
 from ..database import record_command
 from ..database import get_recorder
 
@@ -389,6 +389,10 @@ class ManifestService:
                     continue
 
                 _url: str = _d["urls"][0]
+                # Resolve ruyi mirror:// URLs to real URLs
+                if _url.startswith("mirror://"):
+                    _url = _url.replace("mirror://openbsd/", "https://mirrors.tuna.tsinghua.edu.cn/OpenBSD/") \
+                               .replace("mirror://revyos/", "https://mirror.iscas.ac.cn/revyos/")
                 _f_loc = riko_cache_dir / _d["name"]
 
                 # TODO: replace curl with a better download library
@@ -583,12 +587,7 @@ class ManifestService:
                 riko_toml_upstream = GithubUpstream(riko_toml_nvdat["github"], gv)
             elif riko_toml_source == "regex":
                 source = riko_toml.get_source()
-
-                file_url = source["regex_file_url"]
-                file_url = file_url.replace("{{nvchecker.url}}", riko_toml_nvdat["url"])
-                file_url = file_url.replace("{{upstream_version}}", gv)
-
-                riko_toml_upstream = RegexUpstream(riko_toml_nvdat["url"], riko_toml_nvdat["regex"], file_url, source["regex_file_regex"])
+                riko_toml_upstream = build_regex_upstream(riko_toml_nvdat, source, gv)
             else:
                 raise NotImplementedError(f"upstream source {riko_toml_source} not supported")
 

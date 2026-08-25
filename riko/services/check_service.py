@@ -12,6 +12,7 @@ from ..config.const import basedir, nvchecker_datadir, riko_datadir, ruyi_datadi
 from ..core import get_riko
 from ..database import record_command, get_recorder
 from ..interfaces.cli.utils import ensure_dir
+from ..upstreams.regex import resolve_file_exists_version
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +201,36 @@ class CheckService:
         try:
             with open(nvchecker_result, 'r') as f:
                 nvchecker_results = json.load(f)
+
+            # For file_exists_regex packages, only count a version if its release page has the target file
+            riko = get_riko()
+            for result in nvchecker_results:
+                package_name = result.get('name', 'unknown')
+                if result.get('event') == 'error' or not result.get('version'):
+                    continue
+                up = riko.get_ruyi_package(package_name)
+                if up is None:
+                    continue
+                nv_dat = up.get_nvchecker_dat()
+                source = up.get_source()
+                if nv_dat.get("source") != "regex" or not source or "file_exists_regex" not in source:
+                    continue
+
+                effective, event = resolve_file_exists_version(
+                    nv_dat, source, result.get('version', ''), result.get('old_version', '')
+                )
+
+                if effective != result.get('version') or event != result.get('event'):
+                    logger.info(
+                        f"[file_exists] {package_name}: nvchecker {result.get('version')} "
+                        f"({result.get('event')}) → corrected {effective} ({event})"
+                    )
+                result['version'] = effective
+                result['event'] = event
+
+            # Write back corrected results so scheduler, DB and Telegram summaries stay consistent
+            with open(nvchecker_result, 'w') as f:
+                json.dump(nvchecker_results, f, indent=2)
 
             total_count = 0
             updated_count = 0
