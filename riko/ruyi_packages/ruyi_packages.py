@@ -1,5 +1,3 @@
-# riko/ruyi_packages/ruyi_packages.py - 上游包配置管理
-
 import logging
 import os
 import tomllib
