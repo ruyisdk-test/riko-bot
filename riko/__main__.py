@@ -4,7 +4,6 @@ import argparse
 import logging
 import sys
 
-# 导入各子命令的实现函数
 from riko.interfaces.cli.check import check
 from riko.interfaces.cli.list import list_result
 from riko.interfaces.cli.manifests import manifests
@@ -19,13 +18,10 @@ from riko.services.scheduler_service import (
 from riko.interfaces.cli.telegramBot import telegramBot
 from riko.interfaces.cli.version_sync import version_sync
 
-# 配置日志级别
 logging.basicConfig(level=logging.INFO)
 
 
 def main():
-    """Riko CLI 主入口函数"""
-
     myriko = get_riko()
     myriko.load_from_cache()
 
@@ -33,10 +29,10 @@ def main():
 
     subparsers = parser.add_subparsers(dest="subcommand", help="sub-commands")
 
-    subparser = subparsers.add_parser("check", help="获取数据并刷新本地缓存")
+    subparser = subparsers.add_parser("check", help="fetch data and refresh the local cache")
     subparser.set_defaults(func=lambda args: check())
 
-    subparser = subparsers.add_parser("list", help="列出 nvchecker 结果事件或级别")
+    subparser = subparsers.add_parser("list", help="list nvchecker result events or levels")
     subparser.add_argument(
         "event",
         help="event or level, default `updated`",
@@ -46,48 +42,47 @@ def main():
     )
     subparser.set_defaults(func=lambda args: list_result(args.event))
 
-    subparser = subparsers.add_parser("manifests", help="从旧的生成新的软件包索引清单")
+    subparser = subparsers.add_parser("manifests", help="generate new package index manifests from old ones")
     subparser.add_argument("-d", "--down-grade", action="store_true", help="allow generating downgrade manifests")
     subparser.add_argument("up_name", type=str, help="upstream name")
     subparser.add_argument("gen_vers", nargs="*", help="specify new versions, or use nvchecker result")
     subparser.set_defaults(func=lambda args: manifests(args.up_name, args.gen_vers, args.down_grade))
 
-    subparser = subparsers.add_parser("pr", help="提交 PR 到 packages-index 仓库")
-    subparser.add_argument("package_name", type=str, help="上游包名称（例如：LicheeRV-Nano-Build）")
-    subparser.add_argument("--branch-prefix", type=str, default="manifest-update", help="功能分支前缀（默认: manifest-update）")
-    subparser.add_argument("--github-token", type=str, help="GitHub Personal Access Token（优先级: CLI > 配置文件 > 环境变量）")
-    subparser.add_argument("--repo-owner", type=str, default="SmulllLu", help="GitHub 仓库所有者（默认: SmulllLu）")
-    subparser.add_argument("--repo-name", type=str, default="packages-index", help="GitHub 仓库名称（默认: packages-index）")
-    subparser.add_argument("--base-branch", type=str, default="pr", help="PR 目标分支（默认: pr）")
+    subparser = subparsers.add_parser("pr", help="submit a PR to the packages-index repo")
+    subparser.add_argument("package_name", type=str, help="upstream package name (e.g. LicheeRV-Nano-Build)")
+    subparser.add_argument("--branch-prefix", type=str, default="manifest-update", help="feature branch prefix (default: manifest-update)")
+    subparser.add_argument("--github-token", type=str, help="GitHub Personal Access Token (priority: CLI > config file > env var)")
+    subparser.add_argument("--repo-owner", type=str, default="SmulllLu", help="GitHub repo owner (default: SmulllLu)")
+    subparser.add_argument("--repo-name", type=str, default="packages-index", help="GitHub repo name (default: packages-index)")
+    subparser.add_argument("--base-branch", type=str, default="pr", help="PR target branch (default: pr)")
     subparser.set_defaults(func=lambda args: pr(args))
 
-    scheduler_parser = subparsers.add_parser("scheduler", help="定时任务调度器管理")
+    scheduler_parser = subparsers.add_parser("scheduler", help="manage the scheduled task scheduler")
     scheduler_subparsers = scheduler_parser.add_subparsers(dest="scheduler_action", help="scheduler actions")
 
-    start_parser = scheduler_subparsers.add_parser("start", help="启动定时任务调度器并保持运行")
-    start_parser.add_argument("--hour", type=int, default=2, help="每天执行的小时（0-23，默认凌晨 2 点）")
-    start_parser.add_argument("--minute", type=int, default=0, help="每天执行的分钟（0-59，默认 0 分）")
+    start_parser = scheduler_subparsers.add_parser("start", help="start the scheduled task scheduler and keep it running")
+    start_parser.add_argument("--hour", type=int, default=2, help="hour of day to run (0-23, default 2)")
+    start_parser.add_argument("--minute", type=int, default=0, help="minute of hour to run (0-59, default 0)")
     start_parser.set_defaults(func=lambda args: run_scheduler_daemon(args.hour, args.minute))
-    stop_parser = scheduler_subparsers.add_parser("stop", help="停止定时任务调度器")
+    stop_parser = scheduler_subparsers.add_parser("stop", help="stop the scheduled task scheduler")
     stop_parser.set_defaults(func=lambda args: stop_scheduler())
-    status_parser = scheduler_subparsers.add_parser("status", help="查看调度器状态")
+    status_parser = scheduler_subparsers.add_parser("status", help="show scheduler status")
     status_parser.set_defaults(func=lambda args: print(scheduler_status()))
-    trigger_parser = scheduler_subparsers.add_parser("trigger", help="手动触发每日检查和 PR 任务")
+    trigger_parser = scheduler_subparsers.add_parser("trigger", help="manually trigger the daily check and PR task")
     trigger_parser.set_defaults(func=lambda args: cmd_scheduler_trigger())
 
-    subparser = subparsers.add_parser("telegram-bot", help="启动 Telegram 机器人")
+    subparser = subparsers.add_parser("telegram-bot", help="start the Telegram bot")
     subparser.set_defaults(func=lambda args: telegramBot())
 
-    # version-sync 子命令
-    subparser = subparsers.add_parser("version-sync", help="同步上游版本与 packages-index")
-    subparser.add_argument("--dry-run", action="store_true", help="仅显示变更，不执行 Git 操作")
-    subparser.add_argument("--package", type=str, metavar="PACKAGE_NAME", help="仅同步指定包（例如：freebsd）")
-    subparser.add_argument("-v", "--verbose", action="store_true", help="显示详细版本信息")
-    subparser.add_argument("--github-token", type=str, help="GitHub Personal Access Token（优先级：CLI > 配置文件）")
-    subparser.add_argument("--repo-owner", type=str, help="GitHub 仓库所有者（默认：SmulllLu）")
-    subparser.add_argument("--repo-name", type=str, help="GitHub 仓库名称（默认：packages-index）")
-    subparser.add_argument("--base-branch", type=str, help="PR 目标分支（默认：pr）")
-    subparser.add_argument("--branch-prefix", type=str, help="功能分支前缀（默认：manifest-update）")
+    subparser = subparsers.add_parser("version-sync", help="sync upstream versions with packages-index")
+    subparser.add_argument("--dry-run", action="store_true", help="only show changes without performing Git operations")
+    subparser.add_argument("--package", type=str, metavar="PACKAGE_NAME", help="only sync the specified package (e.g. freebsd)")
+    subparser.add_argument("-v", "--verbose", action="store_true", help="show detailed version info")
+    subparser.add_argument("--github-token", type=str, help="GitHub Personal Access Token (priority: CLI > config file)")
+    subparser.add_argument("--repo-owner", type=str, help="GitHub repo owner (default: SmulllLu)")
+    subparser.add_argument("--repo-name", type=str, help="GitHub repo name (default: packages-index)")
+    subparser.add_argument("--base-branch", type=str, help="PR target branch (default: pr)")
+    subparser.add_argument("--branch-prefix", type=str, help="feature branch prefix (default: manifest-update)")
     subparser.set_defaults(func=lambda args: version_sync(args))
 
     if len(sys.argv) == 1:
