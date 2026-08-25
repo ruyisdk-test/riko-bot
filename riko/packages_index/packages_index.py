@@ -1,5 +1,3 @@
-# riko/packages_index/packages_index.py - packages-index 仓库数据加载
-
 import os
 import semver
 import tomllib
