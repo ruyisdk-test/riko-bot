@@ -11,7 +11,7 @@ def rikoring(old_pkgs: List[RikoPkg], new_pkgs: List[RikoPkg]) -> None:
     :return:
     """
     urls = new_pkgs[0].get_manifest()[0]["distfiles"][0]["urls"]
-    urls.append(urls[0].replace("mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage", "cdimage.ubuntu.com"))
+    urls.append(urls[0].replace("cdimage.ubuntu.com", "mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage"))
 
 
 def post_rikoring(old_pkgs: List[RikoPkg], new_pkgs: List[RikoPkg]) -> None:

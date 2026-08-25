@@ -1,11 +1,13 @@
 [nvchecker]
 source = "regex"
-url = "https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cdimage/releases/"
-regex = '<a href="([\d.]+)/" title="[\d.]+">[\d.]+/</a>'
+url = "https://cdimage.ubuntu.com/ubuntu/releases/"
+regex = '<a href="([\d.]+)/"'
 
 [source]
 regex_file_url = "{{nvchecker.url}}{{upstream_version}}/release/"
-regex_file_regex = '<a href="ubuntu-.+" title="ubuntu-.+">(ubuntu-.+)</a>'
+regex_file_regex = '<a href="(ubuntu-{{upstream_version}}-[^"]+)">ubuntu-[^<]+</a>'
+# The version is considered to exist only when the release page contains a file matching this regex (riko corrects the nvchecker result accordingly)
+file_exists_regex = 'preinstalled-server-riscv64\+unmatched\.img\.xz'
 
 [entities]
 image-combo = [
