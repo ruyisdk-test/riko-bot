@@ -1,5 +1,3 @@
-# riko/cli/list.py - 列出 nvchecker 检查结果
-
 import json
 import sys
 

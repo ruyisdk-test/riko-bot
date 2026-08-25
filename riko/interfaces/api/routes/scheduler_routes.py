@@ -25,22 +25,12 @@ router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 def api_start_scheduler(
     request: SchedulerStartRequest = Body(default=None)
 ):
-    """
-    启动定时调度器
-
-    HTTP 方法：POST（修改状态）
-    请求体（可选）：{} （可选 hour/minute）
-    返回：调度器状态
-    注：当前默认为每天凌晨 2 点运行
-    """
-    # 如果没有提供请求体，使用默认值
     if request is None:
         request = SchedulerStartRequest()
 
     logger.info("[API] Starting scheduler")
 
     try:
-        # 设置触发源为 API
         set_trigger_source("api")
 
         start_scheduler(request.hour, request.minute)
@@ -55,12 +45,6 @@ def api_start_scheduler(
 
 @router.post("/stop")
 def api_stop_scheduler():
-    """
-    停止定时调度器
-
-    HTTP 方法：POST（修改状态）
-    返回：调度器状态
-    """
     logger.info("[API] Stopping scheduler")
 
     try:
@@ -76,12 +60,6 @@ def api_stop_scheduler():
 
 @router.get("/status")
 def api_scheduler_status():
-    """
-    获取调度器状态
-
-    HTTP 方法：GET（查询操作）
-    返回：调度器状态和任务列表
-    """
     logger.info("[API] Getting scheduler status")
 
     try:
@@ -93,16 +71,9 @@ def api_scheduler_status():
 
 @router.post("/trigger")
 def api_trigger_daily_check():
-    """
-    手动触发每日检查和 PR 任务
-
-    HTTP 方法：POST（触发操作）
-    返回：执行结果
-    """
     logger.info("[API] Triggering daily check")
 
     try:
-        # 设置触发源为 API
         set_trigger_source("api")
 
         daily_check_and_pr()

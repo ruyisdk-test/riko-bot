@@ -11,7 +11,7 @@ from typing import Optional, List
 # Check Endpoints Models
 
 class CheckResponse(BaseModel):
-    """版本检查响应"""
+    """Version check response."""
     total: int
     updated: int
     up_to_date: int
@@ -22,13 +22,13 @@ class CheckResponse(BaseModel):
 # Manifests Endpoints Models
 
 class ManifestsRequest(BaseModel):
-    """Manifest 生成请求"""
-    versions: Optional[List[str]] = None  # 要生成的版本列表
-    down_grade: bool = False  # 是否降级生成
+    """Manifest generation request."""
+    versions: Optional[List[str]] = None
+    down_grade: bool = False
 
 
 class ManifestsResponse(BaseModel):
-    """Manifest 生成响应"""
+    """Manifest generation response."""
     package_name: str
     combo_name: str
     version: str
@@ -41,7 +41,7 @@ class ManifestsResponse(BaseModel):
 # PR Endpoints Models
 
 class PRRequest(BaseModel):
-    """PR 创建请求"""
+    """PR creation request."""
     branch_prefix: Optional[str] = None
     github_token: Optional[str] = None
     repo_owner: Optional[str] = None
@@ -52,31 +52,31 @@ class PRRequest(BaseModel):
 # Scheduler Endpoints Models
 
 class SchedulerStartRequest(BaseModel):
-    """调度器启动请求（暂未使用，默认为每天凌晨2点）"""
-    # 注：当前 scheduler.py 硬编码为每天凌晨2点，此参数暂未生效
+    """Scheduler start request (unused for now; defaults to 2 AM daily)."""
+    # NOTE: scheduler.py currently hardcodes 2 AM; this field is not yet effective
     hour: int = 2
     minute: int = 0
 
 # versions-sync Endpoints Models
 class VersionSyncRequest(BaseModel):
-    """版本同步请求"""
-    dry_run: bool = False  # 预览模式，不执行实际修改
-    package: Optional[str] = None  # 指定单个包
-    verbose: bool = False  # 详细输出模式
-    github_token: Optional[str] = None  # GitHub Token
-    repo_owner: Optional[str] = None  # 仓库所有者
-    repo_name: Optional[str] = None  # 仓库名称
-    base_branch: Optional[str] = None  # 基础分支
-    branch_prefix: Optional[str] = None  # 分支前缀
+    """Version sync request."""
+    dry_run: bool = False
+    package: Optional[str] = None
+    verbose: bool = False
+    github_token: Optional[str] = None
+    repo_owner: Optional[str] = None
+    repo_name: Optional[str] = None
+    base_branch: Optional[str] = None
+    branch_prefix: Optional[str] = None
 
 
 class VersionSyncResponse(BaseModel):
-    """版本同步响应"""
+    """Version sync response."""
     status: str  # success / failed / dry_run
-    packages_scanned: int  # 扫描的包数量
-    combos_with_changes: int  # 有变更的 combo 数量
-    versions_to_add: int  # 要添加的版本数
-    versions_to_delete: int  # 要删除的版本数
-    scan_id: Optional[int] = None  # 扫描记录 ID
+    packages_scanned: int
+    combos_with_changes: int
+    versions_to_add: int
+    versions_to_delete: int
+    scan_id: Optional[int] = None
     error_type: Optional[str] = None
     error_message: Optional[str] = None

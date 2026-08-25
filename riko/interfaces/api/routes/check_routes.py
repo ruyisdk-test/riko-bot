@@ -20,15 +20,11 @@ router = APIRouter(prefix="/check", tags=["check"])
 @router.get("", response_model=CheckResponse)
 @router.get("/", response_model=CheckResponse)
 def api_check_versions():
-    """
-    触发版本检查
-    """
     logger.info("[API] Received check request")
 
     try:
-        # 直接调用 check 命令的核心逻辑
         riko = get_riko()
-        riko.load_from_cache()  # 加载缓存数据
+        riko.load_from_cache()
         nvchecker_results = riko.get_nvchecker_results("any")
 
         total = len(nvchecker_results)
@@ -81,19 +77,13 @@ def api_check_versions():
 
 @router.post("/run", response_model=CheckResponse)
 def api_run_check():
-    """
-    执行版本检查
-    """
     logger.info("[API] Received check run request")
 
     try:
-        # 设置触发源为 API
         set_trigger_source("api")
 
-        # 执行 check 命令
         check_command()
 
-        # 返回结果
         riko = get_riko()
         riko.load_from_cache()
         nvchecker_results = riko.get_nvchecker_results("any")
