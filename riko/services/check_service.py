@@ -1,10 +1,3 @@
-"""
-Check Service - 版本检查服务
-
-本模块提供版本检查的核心业务逻辑，从 CLI 层分离出来。
-包含环境设置、ruyi update、nvchecker 执行等核心功能。
-"""
-
 import json
 import logging
 import os
@@ -24,21 +17,17 @@ logger = logging.getLogger(__name__)
 
 
 class CheckService:
-    """版本检查服务类"""
 
     @staticmethod
     def _ensure_riko_path() -> None:
-        """确保 riko 路径存在"""
         ensure_dir(riko_datadir)
 
     @staticmethod
     def _ensure_nvchecker_path() -> None:
-        """确保 nvchecker 路径存在"""
         ensure_dir(nvchecker_datadir)
 
     @staticmethod
     def _ensure_ruyi_path() -> None:
-        """确保 ruyi 路径存在"""
         ensure_dir(ruyi_datadir)
         ensure_dir(ruyi_config_dir)
         ensure_dir(ruyi_config_dir / 'ruyi')
@@ -48,19 +37,16 @@ class CheckService:
 
     @staticmethod
     def _ensure_paths() -> None:
-        """确保所有路径存在"""
         CheckService._ensure_riko_path()
         CheckService._ensure_nvchecker_path()
         CheckService._ensure_ruyi_path()
 
     @staticmethod
     def _ensure_nvchecker_env(env: Dict) -> None:
-        """确保 nvchecker 环境变量存在"""
         env['PYTHONPATH'] = str(basedir)
 
     @staticmethod
     def _ensure_ruyi_env(env: Dict) -> None:
-        """确保 ruyi 环境变量存在"""
         env['XDG_CONFIG_HOME'] = str(ruyi_config_dir)
         env['XDG_DATA_HOME'] = str(ruyi_data_dir)
         env['XDG_CACHE_HOME'] = str(ruyi_cache_dir)
@@ -68,14 +54,7 @@ class CheckService:
 
     @staticmethod
     def _repair_ruyi_cache() -> bool:
-        """
-        修复 ruyi packages-index 缓存目录的 git 状态
-
-        当 ``ruyi update`` 因 git 快进失败而报错时，通过 ``git fetch`` +
-        ``git reset --hard`` 将本地缓存重置到远端状态。
-
-        :return: 修复是否成功
-        """
+        # Reset the local packages-index cache to the remote via git fetch + reset --hard
         cache_path = CheckService._resolve_ruyi_packages_index_dir()
         if not (cache_path / ".git").exists():
             return False
@@ -109,7 +88,6 @@ class CheckService:
 
     @staticmethod
     def _ruyi_update() -> bytes:
-        """运行 ``ruyi update``，返回 stdout/stderr 内容"""
         cmd: List[str] = ["ruyi", "update"]
         env = os.environ.copy()
         CheckService._ensure_ruyi_env(env)
@@ -124,17 +102,7 @@ class CheckService:
 
     @staticmethod
     def _resolve_ruyi_packages_index_dir() -> Path:
-        """
-        解析 ruyi 实际使用的 packages-index 仓库路径
-
-        通过 ``ruyi --porcelain repo list`` 查询 ruyi 报告的 local_path，
-        与 const 中固定的路径（沙箱配置里 [repo] local 指定的稳定路径）
-        核对。若 ruyi 报告了不同的实际路径（例如 ruyi 升级后忽略
-        repo.local 或改变内部布局），以 ruyi 报告为准；解析失败时
-        回退到 const 固定路径。
-
-        :return: ruyi 实际使用的仓库路径
-        """
+        # Ask ruyi for the real local_path and fall back to the const path on failure
         try:
             env = os.environ.copy()
             CheckService._ensure_ruyi_env(env)
@@ -163,17 +131,6 @@ class CheckService:
     @staticmethod
     @record_command("check")
     def run() -> None:
-        """
-        执行版本检查
-
-        功能：
-        1. 确保所有路径存在
-        2. 写入 ruyi 配置文件
-        3. 执行 ruyi update
-        4. 生成 nvchecker 配置
-        5. 执行 nvchecker
-        6. 记录结果到数据库
-        """
         CheckService._ensure_paths()
         with open(ruyi_config_dir / "ruyi" / "config.toml", "w") as cfg:
             cfg.write(ruyi_config + "\n" + ruyi_config_extra)
@@ -189,7 +146,6 @@ class CheckService:
             else:
                 raise
 
-        # 解析 ruyi 实际报告的仓库路径，与 const 固定路径核对
         packages_index_dir = CheckService._resolve_ruyi_packages_index_dir()
         if packages_index_dir != ruyi_packages_index_dir:
             logger.warning(
@@ -200,8 +156,7 @@ class CheckService:
             raise FileNotFoundError(packages_index_dir)
         logger.info(f"packages-index repo: {packages_index_dir}")
 
-        # 将 ruyi 实际报告的仓库路径同步给 Riko，避免后续
-        # generate_nvchecker_old_ver() 仍从 const 固定路径加载旧版本。
+        # Sync the reported path so generate_nvchecker_old_ver() loads old versions from it
         get_riko().set_packages_index_dir(packages_index_dir)
 
         logger.info("prepare for `nvchecker`")

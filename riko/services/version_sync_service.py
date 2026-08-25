@@ -1,15 +1,4 @@
 #!/usr/bin/env python3
-# riko/services/version_sync_service.py - 版本同步服务
-"""
-版本同步服务
-
-功能：
-1. 扫描所有 board-image 包
-2. 获取上游可用版本
-3. 对比仓库已有版本
-4. 执行 Git 操作（删除、添加）
-5. 创建 PR 同步变更
-"""
 
 import argparse
 import logging
@@ -39,17 +28,6 @@ logger = logging.getLogger(__name__)
 
 
 class VersionSyncService:
-    """
-    版本同步服务类
-
-    1. 扫描所有 board-image 包的配置
-    2. 获取上游版本和仓库版本
-    3. 计算版本差异
-    4. 执行同步操作
-
-    """
-
-    # 常量定义
     PACKAGES_INDEX_ROOT = basedir.parent / "packages-index"
     MANIFESTS_ROOT = PACKAGES_INDEX_ROOT / "packages" / "board-image"
     DEFAULT_REPO_OWNER = "SmulllLu"
@@ -59,15 +37,8 @@ class VersionSyncService:
 
     @staticmethod
     def scan_all_packages() -> Dict[str, Any]:
-        """
-        扫描所有 board-image 包
-
-        :return: {package_name: package_info} 字典
-
-        """
         packages = {}
 
-        # 遍历 ruyi_packages/board-image 目录
         board_image_dir = ruyi_pkgs_dir / "board-image"
         if not board_image_dir.exists():
             logger.warning(f"Board-image directory not found: {board_image_dir}")
@@ -81,7 +52,6 @@ class VersionSyncService:
             if not riko_toml.exists():
                 continue
 
-            # 解析 riko.toml 配置文件
             try:
                 with open(riko_toml, "rb") as f:
                     config = tomllib.load(f)
@@ -92,7 +62,7 @@ class VersionSyncService:
                 packages[package_name] = {
                     "nvchecker": nvchecker,
                     "combos": entities.get("image-combo", []),
-                    "riko_toml": config  # 保存完整配置供 manifest 生成使用
+                    "riko_toml": config  # keep full config for manifest generation
                 }
 
                 logger.debug(f"Scanned package: {package_name}, combos: {packages[package_name]['combos']}")
@@ -104,27 +74,6 @@ class VersionSyncService:
 
     @staticmethod
     def get_repo_versions(combo_name: str, include_upstream_versions: bool = True) -> Set[str]:
-        """
-        获取 packages-index 中已有版本
-
-        扫描 packages-index/packages/board-image/{combo_name}/ 目录，
-        从所有 .toml 文件中提取版本号。
-
-        如果 include_upstream_versions=True，还会读取 manifest 文件中的
-        upstream_version 字段，用于与上游版本进行精确匹配。
-
-        :param combo_name: combo 名称
-        :param include_upstream_versions: 是否读取 upstream_version 字段
-        :return: 版本号集合
-
-        示例:
-            combo_name = "freebsd-riscv64-mini-live"
-            返回: {"14.0.0", "14.2.0", "14.3.0", "15.0.0"}
-
-            如果 include_upstream_versions=True，还会返回 manifest 文件中
-            定义的 upstream_version 值（如果有的话）
-        """
-        # 复用 get_repo_versions_info，避免代码重复
         info = VersionSyncService.get_repo_versions_info(combo_name)
         versions = info["file_versions"].copy()
 
@@ -136,22 +85,6 @@ class VersionSyncService:
 
     @staticmethod
     def get_repo_versions_info(combo_name: str) -> dict:
-        """
-        获取 packages-index 中已有版本的详细信息
-
-        返回一个包含版本映射信息的字典：
-        {
-            "file_versions": {"0.20250117.0", "0.20250219.0"},  # 文件名版本
-            "upstream_versions": {"20241230_20250117", "20250130_20250219"},  # manifest中的upstream_version
-            "mapping": {  # 文件名版本 -> upstream_version 的映射
-                "0.20250117.0": "20241230_20250117",
-                "0.20250219.0": "20250130_20250219",
-            }
-        }
-
-        :param combo_name: combo 名称
-        :return: 版本信息字典
-        """
         import tomllib
 
         info = {
@@ -167,11 +100,9 @@ class VersionSyncService:
             return info
 
         for manifest_file in combo_dir.glob("*.toml"):
-            # 提取文件名中的版本
             file_version = VersionComparator.parse_version_from_filename(manifest_file.name)
             info["file_versions"].add(file_version)
 
-            # 读取 manifest 文件中的 upstream_version
             try:
                 with open(manifest_file, "rb") as f:
                     manifest_data = tomllib.load(f)
@@ -189,15 +120,6 @@ class VersionSyncService:
 
     @staticmethod
     def get_cache_versions_info(combo_name: str) -> dict:
-        """
-        获取本地 cache 中已有版本信息
-
-        扫描 riko_manifests_dir / "board-image" / {combo_name} 目录，
-        从所有 .toml 文件中提取版本号和 upstream_version。
-
-        :param combo_name: combo 名称
-        :return: 版本信息字典
-        """
         import tomllib
 
         info = {
@@ -213,11 +135,9 @@ class VersionSyncService:
             return info
 
         for manifest_file in combo_dir.glob("*.toml"):
-            # 提取文件名中的版本
             file_version = VersionComparator.parse_version_from_filename(manifest_file.name)
             info["file_versions"].add(file_version)
 
-            # 读取 manifest 文件中的 upstream_version
             try:
                 with open(manifest_file, "rb") as f:
                     manifest_data = tomllib.load(f)
@@ -236,26 +156,7 @@ class VersionSyncService:
     @staticmethod
     @record_command("version-sync")
     def sync_all(args: argparse.Namespace) -> None:
-        """
-        执行版本同步主流程
-
-        这是 version-sync 功能的核心入口，完成以下流程：
-        1. 扫描所有 board-image 包配置
-        2. 从上游获取可用版本
-        3. 对比 packages-index 仓库已有版本
-        4. 打印变更报告（添加/删除的版本）
-        5. 如果不是 dry-run，执行 Git 操作
-        6. 推送分支到远程并创建 PR
-
-        :param args: 命令行参数
-            - dry_run: 预览模式，不执行实际修改
-            - verbose: 详细输出模式
-            - package: 指定单个包
-            - github_token, repo_owner, etc.: Git 操作参数
-        """
-        # 初始化数据库记录器
         recorder = get_recorder()
-        # 检查是否为预览模式（不实际执行修改）
         dry_run = getattr(args, 'dry_run', False)
 
         logger.info("=" * 70)
@@ -264,7 +165,6 @@ class VersionSyncService:
             logger.info("DRY RUN MODE - No changes will be made")
         logger.info("=" * 70)
 
-        # 1. 扫描所有包配置，获取 nvchecker 和 entities 信息
         packages = VersionSyncService.scan_all_packages()
         logger.info(f"Found {len(packages)} packages to scan")
 
@@ -272,14 +172,12 @@ class VersionSyncService:
             logger.warning("No packages found to sync")
             return
 
-        # 存储所有有变更的版本差异
         all_diffs = []
 
-        # 存储所有镜像的报告行（含变更/无变更/跳过），用于生成 Markdown 报告
+        # Report rows for the Markdown report (changed/unchanged/skipped)
         report_rows: List[MirrorReportRow] = []
         total_combos = 0
 
-        # 2. 遍历每个包，对比上游版本与仓库版本
         for package_name, package_info in packages.items():
             nvchecker = package_info["nvchecker"]
             combos = package_info["combos"]
@@ -288,9 +186,9 @@ class VersionSyncService:
                 logger.warning(f"No nvchecker config for {package_name}")
                 report_rows.append(MirrorReportRow(
                     package_name=package_name,
-                    combo_name="（无 nvchecker 配置）",
+                    combo_name="(no nvchecker config)",
                     status=STATUS_SKIPPED,
-                    skip_reason="无 nvchecker 配置",
+                    skip_reason="no nvchecker config",
                 ))
                 continue
 
@@ -298,41 +196,35 @@ class VersionSyncService:
                 logger.warning(f"No combos defined for {package_name}")
                 report_rows.append(MirrorReportRow(
                     package_name=package_name,
-                    combo_name="（未定义镜像）",
+                    combo_name="(no image defined)",
                     status=STATUS_SKIPPED,
-                    skip_reason="未定义 image-combo",
+                    skip_reason="no image-combo defined",
                 ))
                 continue
 
-            # 创建版本获取器，用于从上游获取版本列表
             fetcher = VersionFetcher.from_nvchecker(nvchecker)
 
-            # 从上游 URL 获取所有可用版本
             upstream_versions = fetcher.fetch_all_versions()
             logger.info(f"{package_name} upstream versions: {upstream_versions}")
 
-            # 如果获取上游版本失败（为空），跳过该包
             if not upstream_versions:
                 logger.warning(f"Skipping {package_name}: no upstream versions found (possible network error)")
                 report_rows.append(MirrorReportRow(
                     package_name=package_name,
-                    combo_name=f"（全部 {len(combos)} 个镜像）",
+                    combo_name=f"(all {len(combos)} images)",
                     status=STATUS_SKIPPED,
-                    skip_reason="上游版本获取失败（可能网络错误）",
+                    skip_reason="failed to fetch upstream versions (possible network error)",
                 ))
                 continue
 
-            # 对该包的每个 combo（镜像组合）进行版本对比
             for combo_name in combos:
                 total_combos += 1
 
-                # 获取本地 cache 版本信息（实际要增删的）
+                # Cache is what actually changes; remote is reference-only
                 cache_versions_info = VersionSyncService.get_cache_versions_info(combo_name)
 
-                # 获取远程仓库版本信息（仅展示参考）
                 remote_versions_info = VersionSyncService.get_repo_versions_info(combo_name)
 
-                # 对比版本（同时计算 cache 和 remote 的差异）
                 comparator = VersionComparator()
                 diff = comparator.compare_with_mappings(
                     package_name=package_name,
@@ -354,7 +246,6 @@ class VersionSyncService:
                     ))
                     logger.info(f"✓ {diff.summary()}")
 
-                    # 打印详细报告
                     if args.verbose:
                         logger.info("\n" + diff.detailed_summary() + "\n")
                 else:
@@ -365,7 +256,6 @@ class VersionSyncService:
                         status=STATUS_UNCHANGED,
                     ))
 
-        # 3. 打印总结报告
         logger.info("=" * 70)
         logger.info("VERSION SYNC SUMMARY")
         logger.info("=" * 70)
@@ -373,14 +263,12 @@ class VersionSyncService:
         logger.info(f"Total combos with changes: {len(all_diffs)}")
 
         if all_diffs:
-            # 基于 cache 计算实际变更统计
+            # Stats are based on the local cache
             total_cache_to_add = sum(len(d.cache_to_add) for d in all_diffs)
             total_cache_to_delete = sum(len(d.cache_to_delete) for d in all_diffs)
 
-            # 检查 remote 目录是否存在且有内容
             has_remote_info = any(len(d.remote_versions) > 0 for d in all_diffs)
 
-            # 打印最终变更统计
             logger.info("")
             logger.info("-" * 70)
             logger.info("FINAL CHANGES (local cache vs upstream)")
@@ -389,7 +277,6 @@ class VersionSyncService:
             logger.info(f"  Versions to DELETE: {total_cache_to_delete}")
             logger.info("")
 
-            # 打印每个 combo 的变更详情
             logger.info("Details:")
             for diff in all_diffs:
                 parts = []
@@ -400,7 +287,7 @@ class VersionSyncService:
                 action = ", ".join(parts) if parts else "no changes"
                 logger.info(f"  [{action}] {diff.combo_name}")
 
-            # Remote 参考信息（仅当 remote 有内容时显示）
+            # Remote info is reference-only
             if has_remote_info:
                 total_remote_to_add = sum(len(d.remote_to_add) for d in all_diffs)
                 total_remote_to_delete = sum(len(d.remote_to_delete) for d in all_diffs)
@@ -412,7 +299,6 @@ class VersionSyncService:
                 logger.info(f"  Would add:    {total_remote_to_add}")
                 logger.info(f"  Would delete: {total_remote_to_delete}")
 
-                # 显示 cache 和 remote 的差异
                 cache_only = total_cache_to_add - total_remote_to_add
                 remote_only = total_remote_to_add - total_cache_to_add
                 if cache_only != 0 or remote_only != 0:
@@ -429,9 +315,8 @@ class VersionSyncService:
                 logger.info("      Showing only local cache vs upstream comparison")
                 logger.info("-" * 70)
 
-        # 4. 如果是预览模式，生成 Markdown 报告并退出
         if dry_run:
-            # 生成 Markdown 报告，与 .log 日志文件同名配对
+            # Generate a Markdown report paired with the .log file
             markdown = generate_version_sync_markdown(
                 rows=report_rows,
                 generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -455,7 +340,6 @@ class VersionSyncService:
 
         logger.info("\nStarting Git operations...")
 
-        # 5. 执行 Git 操作：创建分支、提交变更、推送到远程
         try:
             VersionSyncService._execute_git_operations(all_diffs, packages, recorder, args)
         except Exception as e:
@@ -468,36 +352,16 @@ class VersionSyncService:
 
     @staticmethod
     def _execute_git_operations(diffs: List[VersionDiff], packages: Dict[str, Any], recorder, args) -> None:
-        """
-        执行 Git 操作并创建 PR
-
-        1. 加载配置（GitHub token、仓库信息等）
-        2. 清理 packages-index 仓库的未跟踪文件
-        3. 切换到目标分支（默认为 pr）并更新
-        4. 创建单一功能分支用于所有变更
-        5. 删除过时的 manifest 文件
-        6. 调用 ManifestService 生成新的 manifest 文件
-        7. 将生成的文件复制到 packages-index 目录
-        8. 提交变更
-        9. 推送分支到远程并创建 PR
-
-        :param diffs: 版本差异列表
-        :param packages: 包信息字典（包含 riko_toml 配置）
-        :param recorder: 数据库记录器
-        :param args: 命令行参数
-        """
         from ..config.settings import settings
         import subprocess
 
-        # 从配置文件或命令行参数加载 GitHub 配置
-        # 优先级：命令行参数 > 配置文件
+        # CLI args take precedence over config
         gh_token = args.github_token or settings.github_token
         repo_owner = args.repo_owner or settings.github_repo_owner or VersionSyncService.DEFAULT_REPO_OWNER
         repo_name = args.repo_name or settings.github_repo_name or VersionSyncService.DEFAULT_REPO_NAME
         base_branch = args.base_branch or settings.github_base_branch or VersionSyncService.DEFAULT_BASE_BRANCH
         branch_prefix = args.branch_prefix or settings.pr_branch_prefix or VersionSyncService.DEFAULT_BRANCH_PREFIX
 
-        # 检查 packages-index 仓库是否存在
         if not VersionSyncService.PACKAGES_INDEX_ROOT.exists():
             recorder.record_pr_creation(
                 package_name="version-sync",
@@ -511,18 +375,16 @@ class VersionSyncService:
         try:
             repo = git.Repo(VersionSyncService.PACKAGES_INDEX_ROOT)
 
-            # 清理 Git 仓库中的未跟踪文件（临时文件等）
             try:
                 repo.git.clean("-fd", "-d")
                 logger.info("Cleaned untracked files in packages-index")
             except git.GitError as e:
                 logger.warning(f"Failed to clean untracked files: {e}")
 
-            # 切换到目标分支（默认为 main）并从远程拉取最新更新
             logger.info(f"Checking out base branch: {base_branch}")
             try:
                 repo.git.checkout(base_branch)
-                # 使用 --ff-only 避免 divergent branches 问题，如果本地与远程分歧则失败
+                # --ff-only fails on divergent local/remote branches
                 repo.git.pull("origin", base_branch, ff_only=True)
             except git.GitError as e:
                 logger.error(f"Failed to checkout base branch: {e}")
@@ -535,11 +397,10 @@ class VersionSyncService:
                 )
                 raise
 
-            # 创建单一功能分支用于所有变更（格式：manifest-update-all-boards-{base_branch}）
+            # One feature branch for all changes
             feature_branch = f"{branch_prefix}-all-boards-{base_branch}"
             logger.info(f"Using feature branch: {feature_branch}")
 
-            # 创建或切换分支
             if feature_branch in [ref.name for ref in repo.refs]:
                 try:
                     repo.git.checkout(feature_branch)
@@ -547,7 +408,6 @@ class VersionSyncService:
                 except git.GitError as e:
                     logger.warning(f"Failed to checkout branch: {e}")
 
-                # 尝试 rebase
                 try:
                     repo.git.rebase(f"origin/{base_branch}")
                 except git.GitError:
@@ -560,65 +420,54 @@ class VersionSyncService:
                     logger.error(f"Failed to create branch: {e}")
                     raise
 
-            # 收集所有需要删除和添加的 manifest 文件
             files_to_delete = []
             files_to_add = []
 
-            # 按包名收集待添加版本（ManifestService.generate() 会为该包的所有 combos 生成 manifest）
+            # ManifestService.generate() generates for all combos of a package
             package_versions_to_add: Dict[str, Set[str]] = {}
             for diff in diffs:
-                # 需要删除的文件
                 if diff.to_delete:
                     for version in diff.to_delete:
                         manifest_file = VersionSyncService.MANIFESTS_ROOT / diff.combo_name / f"{version}.toml"
                         if manifest_file.exists():
                             files_to_delete.append(str(manifest_file))
 
-                # 收集待添加版本
                 if diff.to_add:
                     if diff.package_name not in package_versions_to_add:
                         package_versions_to_add[diff.package_name] = set()
                     package_versions_to_add[diff.package_name].update(diff.to_add)
 
-            # 为每个包生成 manifest 文件并复制到 packages-index
             for package_name, versions_to_add in package_versions_to_add.items():
                 logger.info(f"Generating manifests for {package_name}, versions: {sorted(versions_to_add)}")
                 try:
-                    # 调用 ManifestService.generate() 生成 manifest
-                    # 该方法会为该包的所有 combos 生成 manifest 文件
-                    # 生成的文件保存在 riko_manifests_dir 中
                     ManifestService.generate(
                         up_name=package_name,
                         gen_vers=list(versions_to_add),
                         down_grade=False
                     )
 
-                    # 从包信息中获取完整配置，用于确定有哪些 combos
                     riko_toml = packages[package_name].get("riko_toml", {})
-                    # 获取该包的所有 combos（镜像组合）
                     combos = riko_toml.get("entities", {}).get("image-combo", [])
                     for combo_name in combos:
                         for version in versions_to_add:
-                            # 查找实际生成的 manifest 文件（可能包含版本前缀，如 0.20240720.0.toml）
                             combo_dir = riko_manifests_dir / "board-image" / combo_name
                             if not combo_dir.exists():
                                 logger.warning(f"Combo directory not found: {combo_dir}")
                                 continue
 
-                            # 使用 glob 查找包含版本号的文件（支持 version.toml 和 0.version.0.toml 等格式）
+                            # Filename may carry a version prefix like 0.20240720.0.toml
                             manifest_files = list(combo_dir.glob(f"*{version}*.toml"))
 
                             if not manifest_files:
                                 logger.warning(f"Manifest file not found for {combo_name} version {version}")
                                 continue
 
-                            # 如果找到多个文件，使用最新的一个
+                            # Use the latest file if multiple match
                             manifest_file = max(manifest_files, key=lambda p: p.stat().st_mtime)
                             logger.debug(f"Found manifest file: {manifest_file}")
 
-                            # 将生成的 manifest 文件同时复制到 packages-index 目录
                             target_dir = VersionSyncService.MANIFESTS_ROOT / combo_name
-                            target_file = target_dir / manifest_file.name  # 保持原文件名
+                            target_file = target_dir / manifest_file.name  # keep original filename
                             target_dir.mkdir(parents=True, exist_ok=True)
                             import shutil
                             shutil.copy2(manifest_file, target_file)
@@ -627,7 +476,6 @@ class VersionSyncService:
 
                 except Exception as e:
                     logger.error(f"✗ Failed to generate manifests for {package_name}: {e}")
-                    # 记录失败到数据库
                     recorder.record_pr_creation(
                         package_name=package_name,
                         version=",".join(sorted(versions_to_add)),
@@ -635,15 +483,11 @@ class VersionSyncService:
                         error_type=type(e).__name__,
                         error_message=str(e)
                     )
-                    # 继续处理其他包，不中断整个流程
 
-            # 从 Git 索引和工作目录中删除过时的 manifest 文件
             if files_to_delete:
                 logger.info(f"Deleting {len(files_to_delete)} files...")
                 try:
-                    # 删除索引中的文件
                     repo.index.remove(files_to_delete)
-                    # 删除工作目录中的文件
                     for f in files_to_delete:
                         try:
                             subprocess.run(["rm", "-f", f], check=True)
@@ -653,7 +497,6 @@ class VersionSyncService:
                 except git.GitError as e:
                     logger.error(f"Failed to remove files from index: {e}")
 
-            # 将新生成的 manifest 文件添加到 Git 索引
             if files_to_add:
                 logger.info(f"Adding {len(files_to_add)} new files to git...")
                 try:
@@ -662,7 +505,6 @@ class VersionSyncService:
                 except git.GitError as e:
                     logger.error(f"Failed to add files to index: {e}")
 
-            # 检查是否有文件变更需要提交
             if files_to_delete or files_to_add:
                 commit_msg_parts = []
                 for diff in diffs:
@@ -685,13 +527,12 @@ class VersionSyncService:
                 logger.info("No file changes to commit")
                 commit_msg = None
 
-            # 推送分支到远程仓库
             if commit_msg:
                 logger.info(f"Pushing branch to {repo_owner}/{repo_name}...")
                 origin = repo.remote(name="origin")
                 remote_url = origin.url
 
-                # 使用 token 嵌入 URL 的方式认证
+                # Authenticate by embedding the token in the URL
                 if remote_url.startswith("https://") and gh_token:
                     token_url = f"https://{gh_token}@github.com/{repo_owner}/{repo_name}.git"
                     origin.set_url(token_url)
@@ -703,17 +544,15 @@ class VersionSyncService:
                     logger.error(f"Failed to push: {e}")
                     raise
                 finally:
-                    # 恢复原始 URL，避免 token 泄露
+                    # Restore the original URL to avoid leaking the token
                     if remote_url.startswith("https://") and gh_token:
                         origin.set_url(remote_url)
 
                 logger.info("✓ Git operations completed successfully")
 
-                # 构建 PR 标题和描述
                 total_to_add = sum(len(d.to_add) for d in diffs)
                 total_to_delete = sum(len(d.to_delete) for d in diffs)
 
-                # 获取所有涉及的 package 名称
                 package_names = set(d.package_name for d in diffs)
                 pr_title = f"manifests: update all board-image manifests ({len(package_names)} packages, {total_to_add} add, {total_to_delete} remove)"
 
@@ -727,7 +566,6 @@ class VersionSyncService:
                     "",
                 ]
 
-                # 按 package 分组统计
                 package_stats: Dict[str, Dict[str, int]] = {}
                 for diff in diffs:
                     pkg = diff.package_name
@@ -758,7 +596,6 @@ class VersionSyncService:
                 ])
                 pr_body = "\n".join(pr_body_parts)
 
-                # 调用 PRService 创建 PR
                 PRService._create_github_pr(
                     gh_token=gh_token,
                     repo_owner=repo_owner,
