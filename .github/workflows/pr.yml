@@ -8,10 +8,10 @@ on:
 jobs:
   dco:
     name: DCO compliance
-    runs-on: ubuntu-latest #让工作流运行在 ubuntu的最新版本上
-    steps: # 要执行的动作
+    runs-on: ubuntu-latest # Run the workflow on the latest Ubuntu
+    steps: # Actions to run
       - name: Run dco-check
-        uses: christophebedard/dco-check@0.5.0 # 一个现成的action DCO 合规校验工具
+        uses: christophebedard/dco-check@0.5.0 # A ready-made action for DCO compliance checks
         with:
           python-version: '3.12'
           args: '--verbose'
