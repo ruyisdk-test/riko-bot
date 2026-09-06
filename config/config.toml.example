@@ -51,6 +51,11 @@ base_branch="pr" # PR target branch
 # PR configuration
 branch_prefix="manifest-update" # feature branch prefix
 
+[telegram]
+# Telegram bot configuration (leave empty to disable notifications)
+token=""
+chat_id=""
+
 [logging]
 # Logging configuration
 level="INFO" # log level
