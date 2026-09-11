@@ -3,7 +3,7 @@
 import logging
 
 from fastapi import FastAPI
-from .routes import check_routes, manifest_routes, pr_routes, scheduler_routes, versions_sync_routes
+from .routes import check_routes, manifest_routes, pr_routes, scheduler_routes, telegramBot_routes, versions_sync_routes
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ app.include_router(check_routes.router)
 app.include_router(manifest_routes.router)
 app.include_router(pr_routes.router)
 app.include_router(scheduler_routes.router)
+app.include_router(telegramBot_routes.router)
 app.include_router(versions_sync_routes.router)
 
 
@@ -42,6 +43,9 @@ def api_root():
                 "POST /scheduler/stop": "stop the scheduler",
                 "GET /scheduler/status": "get scheduler status",
                 "POST /scheduler/trigger": "manually trigger the daily check and PR task"
+            },
+            "telegram": {
+                "POST /telegram/report": "submit package results as one Telegram summary"
             },
             "versions-sync": {
                 "POST /version-sync": "run version sync (compare upstream versions and create a PR)"

@@ -4,8 +4,12 @@ Pydantic models for the Riko API
 This module contains all request and response schemas used by the API endpoints.
 """
 
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, ConfigDict, Field, constr
+from typing import Any, Dict, List, Literal, Optional
+
+from ....core.report_models import PackageReportData
+
+NonBlankString = constr(strip_whitespace=True, min_length=1)
 
 
 # Check Endpoints Models
@@ -80,3 +84,41 @@ class VersionSyncResponse(BaseModel):
     scan_id: Optional[int] = None
     error_type: Optional[str] = None
     error_message: Optional[str] = None
+
+
+# Telegram Package Report Models
+
+ReportStatus = Literal["success", "failed", "skipped"]
+
+
+class TelegramReportItem(BaseModel):
+    """External package result submitted for Telegram notification."""
+    model_config = ConfigDict(extra="forbid")
+
+    package: NonBlankString
+    status: ReportStatus
+    message: Optional[str] = None
+    old_version: Optional[str] = None
+    new_version: Optional[str] = None
+    manifest_status: Optional[str] = None
+    pr_status: Optional[str] = None
+    pr_url: Optional[str] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class TelegramReportRequest(BaseModel):
+    """One or more package reports to send in a single notification."""
+    model_config = ConfigDict(extra="forbid")
+
+    reports: List[TelegramReportItem] = Field(min_length=1)
+
+
+class TelegramReportResponse(BaseModel):
+    """Result of building and sending package reports."""
+    success: bool
+    telegram_sent: bool
+    total: int
+    success_count: int
+    failed_count: int
+    skipped_count: int
+    results: List[PackageReportData]

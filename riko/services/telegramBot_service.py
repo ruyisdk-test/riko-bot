@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Sequence
 from telegram import Update, Bot
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from telegram.error import TelegramError
@@ -7,6 +8,7 @@ from telegram.request import HTTPXRequest
 import httpx
 
 from ..config.settings import settings
+from ..core.report_models import PackageReportData
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -95,6 +97,61 @@ async def send_message(message: str, chat_id: int = None) -> bool:
     except Exception as e:
         logger.error(f"[Telegram] Failed to send message: {e}")
         return False
+
+
+def _escape_report_markdown(value) -> str:
+    """Escape untrusted dynamic text for Telegram's legacy Markdown parser."""
+    text = str(value)
+    text = text.replace("\\", "\\\\")
+    for char in "_*[]()`":
+        text = text.replace(char, f"\\{char}")
+    return text
+
+
+def format_package_reports(reports: Sequence[PackageReportData]) -> str:
+    """Render one Telegram summary for all reports in a request."""
+    total = len(reports)
+    success_count = sum(report.status == "success" for report in reports)
+    failed_count = sum(report.status == "failed" for report in reports)
+    skipped_count = sum(report.status == "skipped" for report in reports)
+    lines = [
+        "Riko Package Report",
+        "",
+        f"Total: {total}",
+        f"Success: {success_count}",
+        f"Failed: {failed_count}",
+        f"Skipped: {skipped_count}",
+        "",
+    ]
+    emojis = {"success": "✅", "failed": "❌", "skipped": "⏭️"}
+
+    for report in reports:
+        package = _escape_report_markdown(report.package)
+        status = _escape_report_markdown(report.status)
+        lines.append(f"{emojis[report.status]} {package} - {status}")
+        if report.category:
+            lines.append(f"  Category: {_escape_report_markdown(report.category)}")
+        if report.old_version or report.new_version:
+            old_version = _escape_report_markdown(report.old_version or "?")
+            new_version = _escape_report_markdown(report.new_version or "?")
+            lines.append(f"  Version: {old_version} → {new_version}")
+        if report.manifest_status:
+            lines.append(f"  Manifest: {_escape_report_markdown(report.manifest_status)}")
+        if report.pr_status:
+            lines.append(f"  PR: {_escape_report_markdown(report.pr_status)}")
+        if report.pr_url:
+            lines.append(f"  PR URL: {_escape_report_markdown(report.pr_url)}")
+        if report.message:
+            lines.append(f"  Message: {_escape_report_markdown(report.message)}")
+        if not report.package_config_found:
+            lines.append("  Configuration: not found")
+
+    return "\n".join(lines).strip()
+
+
+async def notify_package_reports(reports: Sequence[PackageReportData]) -> bool:
+    """Send one summary through the existing Telegram sender."""
+    return await send_message(format_package_reports(reports))
 
 
 async def notify_scan_summary(

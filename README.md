@@ -205,6 +205,7 @@ RIKO_DEBUG=false
 
 # Telegram Bot (optional)
 TELEGRAM_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
 
 # Proxy (optional, for accessing Telegram API in mainland China)
 HTTP_PROXY=http://127.0.0.1:7890
@@ -410,7 +411,37 @@ Riko includes an optional FastAPI server for REST API access.
 python3 -m uvicorn riko.interfaces.api.app:app --reload --host 127.0.0.0 --port 7777
 ```
 
-The API will be available at `http://localhost:7777`
+The API will be available at `http://localhost:7777`.
+
+Interactive Swagger documentation is available at `http://localhost:7777/docs`.
+
+#### Package Report API
+
+Send one or more package results to `POST /telegram/report`:
+
+```json
+{
+  "reports": [
+    {
+      "package": "openbsd",
+      "status": "success",
+      "message": "test completed"
+    },
+    {
+      "package": "freebsd",
+      "status": "failed",
+      "message": "test timeout"
+    }
+  ]
+}
+```
+
+`reports` must contain at least one item. `status` must be `success`, `failed`, or `skipped`.
+Each request sends one Telegram summary, including when it contains one report. Unknown packages
+are accepted and returned with `package_config_found=false`.
+
+Set `TELEGRAM_TOKEN` and `TELEGRAM_CHAT_ID` in `.env` (or `token` and `chat_id` in the
+`[telegram]` section of `config/config.toml`) before using the endpoint.
 
 
 
